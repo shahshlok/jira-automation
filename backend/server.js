@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import session from 'express-session';
 import axios from 'axios';
 import dotenv from 'dotenv';
 
@@ -13,6 +14,7 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const SECRET_KEY = process.env.SECRET_KEY;
 const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:5000/auth/callback';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const JIRA_SITE_URL = process.env.JIRA_SITE_URL;
 
 app.use(cors({
   origin: FRONTEND_URL,
@@ -21,27 +23,42 @@ app.use(cors({
 
 app.use(express.json());
 app.use(cookieParser());
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-session-secret-key-change-this-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
 
 app.get('/auth/atlassian', (req, res) => {
-  const authUrl =
-   `https://auth.atlassian.com/authorize?audience=api.atlassian.com` +
-   `&client_id=${CLIENT_ID}` +
-   `&scope=read%3Ame` +
-   `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
-   // Using the Authorization Code workflow (provide a code upon successful login)
-   `&response_type=code` +
-   // Forces the consent screen, ensuring the user is aware of the permissions being requested
-   `&prompt=consent`;
+  const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  
+  // Store state in session for validation
+  req.session.oauthState = state;
+  
+  const authUrl = `https://auth.atlassian.com/authorize?audience=api.atlassian.com&client_id=ANJmu8fRQoUaa6RsjM1jGX9QXVssr1s9&scope=read%3Ame%20read%3Aaccount%20read%3Ajira-work%20read%3Ajira-user&redirect_uri=http%3A%2F%2Flocalhost%3A5000%2Fauth%2Fcallback&state=${state}&response_type=code&prompt=consent`;
 
   res.redirect(authUrl);
 });
 
 app.get('/auth/callback', async (req, res) => {
-  const { code } = req.query;
+  const { code, state } = req.query;
   
   if (!code) {
     return res.status(400).json({ error: 'Authorization code not provided' });
   }
+  
+  // Validate state parameter for CSRF protection
+  if (!state || state !== req.session.oauthState) {
+    return res.status(400).json({ error: 'Invalid state parameter - possible CSRF attack' });
+  }
+  
+  // Clear the state from session after validation
+  delete req.session.oauthState;
 
   try {
       
@@ -81,11 +98,53 @@ app.get('/auth/callback', async (req, res) => {
 
     res.redirect(`${FRONTEND_URL}/dashboard`);
   } catch (error) {
-    console.error('OAuth callback error:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Authentication failed' });
+    console.error('OAuth callback error - Full error:', error);
+    console.error('Response data:', error.response?.data);
+    console.error('Response status:', error.response?.status);
+    console.error('Request config:', {
+      url: error.config?.url,
+      method: error.config?.method,
+      data: error.config?.data
+    });
+    res.status(500).json({ error: 'Authentication failed', details: error.response?.data || error.message });
   }
 });
 
+app.get('/api/accessible-resources', async (req, res) => {
+  const token = req.cookies.jira_auth;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  try {
+      console.log("inside accessible resources api to get cloudId")
+    const response = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      }
+    });
+    
+    // Return the accessible resources data
+    res.json({
+      success: true,
+      resources: response.data,
+      totalSites: response.data.length,
+      primarySite: response.data[0] // Since user has one site
+    });
+  } catch (error) {
+    console.error('Accessible resources error:', error.response?.data || error.message);
+    if (error.response?.status === 401) {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    } else {
+      res.status(500).json({ error: 'Failed to get accessible resources', details: error.response?.data || error.message });
+    }
+  }
+});
+
+
+// TODO: DELETE THIS
 app.get('/auth/me', async (req, res) => {
   const token = req.cookies.jira_auth;
   
@@ -111,6 +170,62 @@ app.get('/auth/me', async (req, res) => {
 app.post('/auth/logout', (req, res) => {
   res.clearCookie('jira_auth');
   res.json({ message: 'Logged out successfully' });
+});
+
+app.get('/api/projects', async (req, res) => {
+  const token = req.cookies.jira_auth;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  try {
+    // First, get the cloudId from accessible resources
+    console.log('Getting accessible resources to find cloudId...');
+    const resourcesResponse = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    const cloudId = resourcesResponse.data[0].id;
+    console.log('CloudId found:', cloudId);
+
+    // Now get projects using the cloudId and proper OAuth Bearer auth
+    console.log('Fetching projects from Jira API v3...');
+    const projectsResponse = await axios.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/project`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    // Return the projects with additional metadata
+    res.json({
+      success: true,
+      cloudId: cloudId,
+      siteName: resourcesResponse.data[0].name,
+      siteUrl: resourcesResponse.data[0].url,
+      totalProjects: projectsResponse.data.length,
+      projects: projectsResponse.data
+    });
+
+  } catch (error) {
+    console.error('Projects fetch error:', error.response?.data || error.message);
+    console.error('Error status:', error.response?.status);
+    
+    if (error.response?.status === 401) {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    } else if (error.response?.status === 403) {
+      res.status(403).json({ error: 'Insufficient permissions to access projects' });
+    } else {
+      res.status(500).json({ 
+        error: 'Failed to fetch projects', 
+        details: error.response?.data || error.message 
+      });
+    }
+  }
 });
 
 app.get('/health', (req, res) => {
