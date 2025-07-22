@@ -34,6 +34,51 @@ app.use(session({
   }
 }));
 
+// Helper function to get cloudId from session with fallback
+async function getCloudId(req) {
+  // First, try to get from session (cached)
+  if (req.session.cloudId) {
+    console.log('Using cached cloudId:', req.session.cloudId);
+    return {
+      cloudId: req.session.cloudId,
+      siteName: req.session.siteName,
+      siteUrl: req.session.siteUrl,
+      fromCache: true
+    };
+  }
+
+  // Fallback: fetch from API if not in session
+  console.log('CloudId not in session, fetching from API...');
+  const token = req.cookies.jira_auth;
+  
+  if (!token) {
+    throw new Error('No authentication token found');
+  }
+
+  const response = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json'
+    }
+  });
+
+  const primarySite = response.data[0];
+  
+  // Cache it in session for future use
+  req.session.cloudId = primarySite.id;
+  req.session.siteName = primarySite.name;
+  req.session.siteUrl = primarySite.url;
+  
+  console.log('CloudId fetched and cached:', primarySite.id);
+  
+  return {
+    cloudId: primarySite.id,
+    siteName: primarySite.name,
+    siteUrl: primarySite.url,
+    fromCache: false
+  };
+}
+
 app.get('/auth/atlassian', (req, res) => {
   const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   
@@ -88,6 +133,23 @@ app.get('/auth/callback', async (req, res) => {
     });
 
     const userInfo = userResponse.data;
+    
+    // Fetch and cache cloudId in session immediately after authentication
+    console.log('Fetching accessible resources to cache cloudId...');
+    const resourcesResponse = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
+      headers: {
+        'Authorization': `Bearer ${access_token}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    // Store cloudId and site info in session for future API calls
+    const primarySite = resourcesResponse.data[0];
+    req.session.cloudId = primarySite.id;
+    req.session.siteName = primarySite.name;
+    req.session.siteUrl = primarySite.url;
+    
+    console.log('CloudId cached in session:', primarySite.id);
     
     res.cookie('jira_auth', access_token, {
       httpOnly: true,
@@ -168,7 +230,17 @@ app.get('/auth/me', async (req, res) => {
 });
 
 app.post('/auth/logout', (req, res) => {
+  // Clear authentication cookie
   res.clearCookie('jira_auth');
+  
+  // Clear cached cloudId and site info from session
+  if (req.session) {
+    delete req.session.cloudId;
+    delete req.session.siteName;
+    delete req.session.siteUrl;
+    console.log('Cleared cloudId cache from session on logout');
+  }
+  
   res.json({ message: 'Logged out successfully' });
 });
 
@@ -180,33 +252,25 @@ app.get('/api/projects', async (req, res) => {
   }
 
   try {
-    // First, get the cloudId from accessible resources
-    console.log('Getting accessible resources to find cloudId...');
-    const resourcesResponse = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
-      }
-    });
-
-    const cloudId = resourcesResponse.data[0].id;
-    console.log('CloudId found:', cloudId);
-
-    // Now get projects using the cloudId and proper OAuth Bearer auth
+    // Get cloudId from session cache (much faster!)
+    const siteInfo = await getCloudId(req);
+    
+    // Fetch projects using the cached cloudId
     console.log('Fetching projects from Jira API v3...');
-    const projectsResponse = await axios.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/project`, {
+    const projectsResponse = await axios.get(`https://api.atlassian.com/ex/jira/${siteInfo.cloudId}/rest/api/3/project`, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
       }
     });
 
-    // Return the projects with additional metadata
+    // Return the projects with metadata
     res.json({
       success: true,
-      cloudId: cloudId,
-      siteName: resourcesResponse.data[0].name,
-      siteUrl: resourcesResponse.data[0].url,
+      cloudId: siteInfo.cloudId,
+      siteName: siteInfo.siteName,
+      siteUrl: siteInfo.siteUrl,
+      fromCache: siteInfo.fromCache,
       totalProjects: projectsResponse.data.length,
       projects: projectsResponse.data
     });
