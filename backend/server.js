@@ -23,7 +23,16 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.get('/auth/atlassian', (req, res) => {
-  const authUrl = `https://auth.atlassian.com/authorize?audience=api.atlassian.com&client_id=${CLIENT_ID}&scope=read%3Ame&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&prompt=consent`;
+  const authUrl =
+   `https://auth.atlassian.com/authorize?audience=api.atlassian.com` +
+   `&client_id=${CLIENT_ID}` +
+   `&scope=read%3Ame` +
+   `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+   // Using the Authorization Code workflow (provide a code upon successful login)
+   `&response_type=code` +
+   // Forces the consent screen, ensuring the user is aware of the permissions being requested
+   `&prompt=consent`;
+
   res.redirect(authUrl);
 });
 
@@ -35,20 +44,25 @@ app.get('/auth/callback', async (req, res) => {
   }
 
   try {
+      
+    // Send a request to the Atlassian token endpoint to get the actual access_token instead of the code that was sent previously when the user successfully logged in on Atlassian.
+    // Returns the access_token in a JSON object
     const tokenResponse = await axios.post('https://auth.atlassian.com/oauth/token', {
       grant_type: 'authorization_code',
       client_id: CLIENT_ID,
       client_secret: SECRET_KEY,
-      code: code,
-      redirect_uri: REDIRECT_URI
+      code: code, 
+      redirect_uri: REDIRECT_URI 
     }, {
       headers: {
         'Content-Type': 'application/json'
       }
     });
 
+    // This token allows you to access Atlassian's APIs on behalf of the user
     const { access_token } = tokenResponse.data;
-
+    
+    // This call fetches the user's basic profile information
     const userResponse = await axios.get('https://api.atlassian.com/me', {
       headers: {
         'Authorization': `Bearer ${access_token}`,
