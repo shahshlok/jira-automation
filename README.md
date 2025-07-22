@@ -1,6 +1,6 @@
 # JIRA Automation with Atlassian OAuth
 
-A full-stack application that implements Atlassian OAuth 2.0 authentication for JIRA automation. The application consists of an Express.js backend and a React frontend.
+A full-stack application that implements Atlassian OAuth 2.0 authentication and JIRA API integration for automation workflows. The application consists of an Express.js backend with JIRA REST API proxy capabilities and a React frontend.
 
 ## 🚀 Quick Start
 
@@ -86,11 +86,33 @@ jira-automation/
 
 ### Backend Routes
 
+#### Authentication
 - `GET /auth/atlassian` - Redirects to Atlassian OAuth login
 - `GET /auth/callback` - Handles OAuth callback and sets cookies
 - `GET /auth/me` - Returns authenticated user info (protected)
 - `POST /auth/logout` - Clears authentication cookies
+
+#### JIRA API Integration
+- `GET /api/accessible-resources` - Returns Atlassian resources accessible to the user
+- `GET /api/projects` - Returns JIRA projects for the authenticated user
+- `ALL /api/jira-proxy/*` - Proxy for JIRA REST API calls (supports GET, POST, PUT, DELETE)
+
+#### System
 - `GET /health` - Health check endpoint
+
+## 🧪 API Testing
+
+The application includes a built-in JIRA API tester that allows you to test any JIRA REST API endpoint directly through the proxy:
+
+**Base URL**: `http://localhost:5000/api/jira-proxy/`
+
+**Usage**: Append any JIRA API v3 path to the base URL. For example:
+- `GET /api/jira-proxy/project` - List all projects
+- `GET /api/jira-proxy/issue/PROJ-123` - Get specific issue
+- `POST /api/jira-proxy/issue` - Create new issue
+- `PUT /api/jira-proxy/issue/PROJ-123` - Update issue
+
+The proxy automatically handles authentication and forwards your request to the appropriate JIRA API endpoint.
 
 ## 🔐 Security Features
 
@@ -125,6 +147,8 @@ npm start    # Hot reload enabled
 | `SECRET_KEY` | Atlassian OAuth Secret | Required |
 | `REDIRECT_URI` | OAuth callback URL | `http://localhost:5000/auth/callback` |
 | `FRONTEND_URL` | Frontend application URL | `http://localhost:3000` |
+| `JIRA_SITE_URL` | Your JIRA site URL | Optional |
+| `SESSION_SECRET` | Express session secret | Auto-generated |
 | `PORT` | Server port | `5000` |
 
 ## 🚀 Production Deployment
@@ -149,7 +173,10 @@ To set up your own Atlassian OAuth app:
 1. Go to [Atlassian Developer Console](https://developer.atlassian.com/console/myapps/)
 2. Create a new OAuth 2.0 (3LO) app
 3. Set the callback URL to: `http://localhost:5000/auth/callback`
-4. Add the `read:me` scope
+4. Add the following scopes:
+   - `read:jira-work` - Read JIRA work data (issues, projects, etc.)
+   - `read:jira-user` - Read JIRA user information
+   - `manage:jira-configuration` - Manage JIRA configuration
 5. Copy your Client ID and Secret to the `.env` file
 
 ## 🔍 Troubleshooting
