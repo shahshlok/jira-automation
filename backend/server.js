@@ -91,7 +91,7 @@ app.get('/auth/atlassian', (req, res) => {
   // Store state in session for validation
   req.session.oauthState = state;
   
-  const authUrl = `https://auth.atlassian.com/authorize?audience=api.atlassian.com&client_id=ANJmu8fRQoUaa6RsjM1jGX9QXVssr1s9&scope=read%3Ame%20read%3Aaccount%20read%3Ajira-work%20read%3Ajira-user&redirect_uri=http%3A%2F%2Flocalhost%3A5000%2Fauth%2Fcallback&state=${state}&response_type=code&prompt=consent`;
+  const authUrl = `https://auth.atlassian.com/authorize?audience=api.atlassian.com&client_id=ANJmu8fRQoUaa6RsjM1jGX9QXVssr1s9&scope=read%3Ajira-work%20read%3Ajira-user%20manage%3Ajira-configuration&redirect_uri=http%3A%2F%2Flocalhost%3A5000%2Fauth%2Fcallback&state=${state}&response_type=code&prompt=consent`;
 
   res.redirect(authUrl);
 });
@@ -129,16 +129,6 @@ app.get('/auth/callback', async (req, res) => {
 
     // This token allows you to access Atlassian's APIs on behalf of the user
     const { access_token } = tokenResponse.data;
-    
-    // This call fetches the user's basic profile information
-    const userResponse = await axios.get('https://api.atlassian.com/me', {
-      headers: {
-        'Authorization': `Bearer ${access_token}`,
-        'Accept': 'application/json'
-      }
-    });
-
-    const userInfo = userResponse.data;
     
     // Fetch and cache cloudId in session immediately after authentication
     console.log('Fetching accessible resources to cache cloudId...');
@@ -201,7 +191,6 @@ app.get('/api/accessible-resources', async (req, res) => {
   }
 });
 
-// TODO: DELETE THIS
 app.get('/auth/me', async (req, res) => {
   const token = req.cookies.jira_auth;
   
@@ -210,14 +199,23 @@ app.get('/auth/me', async (req, res) => {
   }
 
   try {
-    const userResponse = await axios.get('https://api.atlassian.com/me', {
+    // Since we don't have read:me scope, we'll get user info from Jira instead
+    const siteInfo = await getCloudId(req);
+    const userResponse = await axios.get(`https://api.atlassian.com/ex/jira/${siteInfo.cloudId}/rest/api/3/myself`, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
       }
     });
 
-    res.json(userResponse.data);
+    // Format the response to match what the frontend expects
+    const userData = userResponse.data;
+    res.json({
+      name: userData.displayName || userData.name,
+      email: userData.emailAddress,
+      account_id: userData.accountId,
+      picture: userData.avatarUrls?.['48x48'] || userData.avatarUrls?.['32x32']
+    });
   } catch (error) {
     console.error('User info fetch error:', error.response?.data || error.message);
     res.status(401).json({ error: 'Invalid or expired token' });
@@ -284,6 +282,67 @@ app.get('/api/projects', async (req, res) => {
         details: error.response?.data || error.message 
       });
     }
+  }
+});
+
+// API Tester endpoint - proxies requests to Jira API
+app.all('/api/jira-proxy/*', async (req, res) => {
+  const token = req.cookies.jira_auth;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  try {
+    const siteInfo = await getCloudId(req);
+    const apiPath = req.params[0]; // Everything after /api/jira-proxy/
+    
+    // Construct the full Jira API URL
+    const jiraUrl = `https://api.atlassian.com/ex/jira/${siteInfo.cloudId}/rest/api/3/${apiPath}`;
+    
+    const config = {
+      method: req.method,
+      url: jiraUrl,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    };
+
+    // Add request body for POST/PUT requests
+    if (req.body && Object.keys(req.body).length > 0) {
+      config.data = req.body;
+    }
+
+    // Add query parameters
+    if (req.query && Object.keys(req.query).length > 0) {
+      config.params = req.query;
+    }
+
+    console.log(`API Tester: ${req.method} ${jiraUrl}`);
+    const response = await axios(config);
+    
+    res.json({
+      success: true,
+      method: req.method,
+      url: jiraUrl,
+      status: response.status,
+      statusText: response.statusText,
+      data: response.data,
+      headers: response.headers
+    });
+
+  } catch (error) {
+    console.error('API Tester error:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      success: false,
+      method: req.method,
+      error: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data
+    });
   }
 });
 

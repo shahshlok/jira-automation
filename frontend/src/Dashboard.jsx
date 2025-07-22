@@ -150,11 +150,34 @@ const Dashboard = () => {
               backgroundColor: '#e8f5e8', 
               padding: '1rem', 
               borderRadius: '4px',
-              border: '1px solid #c3e6c3'
+              border: '1px solid #c3e6c3',
+              marginBottom: '1rem'
             }}>
               <p style={{ margin: 0, color: '#2d5a2d' }}>
                 ✅ Successfully connected to Atlassian! You can now access JIRA resources.
               </p>
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
+              marginTop: '2rem'
+            }}>
+              <button 
+                onClick={() => navigate('/api-tester')}
+                style={{
+                  backgroundColor: '#0052cc',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: '600'
+                }}
+              >
+                🔧 API Tester
+              </button>
             </div>
           </div>
         )}
