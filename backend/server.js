@@ -34,6 +34,22 @@ app.use(session({
   }
 }));
 
+// Shared function to fetch accessible resources from Atlassian API
+async function fetchAccessibleResources(token) {
+  if (!token) {
+    throw new Error('No authentication token provided');
+  }
+
+  const response = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/json'
+    }
+  });
+
+  return response.data;
+}
+
 // Helper function to get cloudId from session with fallback
 async function getCloudId(req) {
   // First, try to get from session (cached)
@@ -51,18 +67,8 @@ async function getCloudId(req) {
   console.log('CloudId not in session, fetching from API...');
   const token = req.cookies.jira_auth;
   
-  if (!token) {
-    throw new Error('No authentication token found');
-  }
-
-  const response = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/json'
-    }
-  });
-
-  const primarySite = response.data[0];
+  const resourcesData = await fetchAccessibleResources(token);
+  const primarySite = resourcesData[0];
   
   // Cache it in session for future use
   req.session.cloudId = primarySite.id;
@@ -136,15 +142,10 @@ app.get('/auth/callback', async (req, res) => {
     
     // Fetch and cache cloudId in session immediately after authentication
     console.log('Fetching accessible resources to cache cloudId...');
-    const resourcesResponse = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
-      headers: {
-        'Authorization': `Bearer ${access_token}`,
-        'Accept': 'application/json'
-      }
-    });
+    const resourcesData = await fetchAccessibleResources(access_token);
 
     // Store cloudId and site info in session for future API calls
-    const primarySite = resourcesResponse.data[0];
+    const primarySite = resourcesData[0];
     req.session.cloudId = primarySite.id;
     req.session.siteName = primarySite.name;
     req.session.siteUrl = primarySite.url;
@@ -180,20 +181,15 @@ app.get('/api/accessible-resources', async (req, res) => {
   }
 
   try {
-      console.log("inside accessible resources api to get cloudId")
-    const response = await axios.get('https://api.atlassian.com/oauth/token/accessible-resources', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
-      }
-    });
+    console.log("inside accessible resources api to get cloudId")
+    const resourcesData = await fetchAccessibleResources(token);
     
     // Return the accessible resources data
     res.json({
       success: true,
-      resources: response.data,
-      totalSites: response.data.length,
-      primarySite: response.data[0] // Since user has one site
+      resources: resourcesData,
+      totalSites: resourcesData.length,
+      primarySite: resourcesData[0] // Since user has one site
     });
   } catch (error) {
     console.error('Accessible resources error:', error.response?.data || error.message);
@@ -204,7 +200,6 @@ app.get('/api/accessible-resources', async (req, res) => {
     }
   }
 });
-
 
 // TODO: DELETE THIS
 app.get('/auth/me', async (req, res) => {
