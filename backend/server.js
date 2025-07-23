@@ -285,6 +285,61 @@ app.get('/api/projects', async (req, res) => {
   }
 });
 
+app.get('/api/epics/:projectKey', async (req, res) => {
+  const token = req.cookies.jira_auth;
+  const { projectKey } = req.params;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  if (!projectKey) {
+    return res.status(400).json({ error: 'Project key is required' });
+  }
+
+  try {
+    // Get cloudId from session cache
+    const siteInfo = await getCloudId(req);
+    
+    // Fetch epics using JQL search
+    console.log(`Fetching epics for project ${projectKey} from Jira API v3...`);
+    const epicsResponse = await axios.get(`https://api.atlassian.com/ex/jira/${siteInfo.cloudId}/rest/api/3/search`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      },
+      params: {
+        jql: `project=${projectKey} AND issuetype=Epic`
+      }
+    });
+    
+    console.log(`Fetched ${epicsResponse.data.issues.length} epics for project ${projectKey}`);
+    
+    // Return the epics with metadata
+    res.json({
+      success: true,
+      projectKey: projectKey,
+      totalEpics: epicsResponse.data.issues.length,
+      rawResponse: epicsResponse.data
+    });
+
+  } catch (error) {
+    console.error('Epics fetch error:', error.response?.data || error.message);
+    console.error('Error status:', error.response?.status);
+    
+    if (error.response?.status === 401) {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    } else if (error.response?.status === 403) {
+      res.status(403).json({ error: 'Insufficient permissions to access epics' });
+    } else {
+      res.status(500).json({ 
+        error: 'Failed to fetch epics', 
+        details: error.response?.data || error.message 
+      });
+    }
+  }
+});
+
 // API Tester endpoint - proxies requests to Jira API
 app.all('/api/jira-proxy/*', async (req, res) => {
   const token = req.cookies.jira_auth;

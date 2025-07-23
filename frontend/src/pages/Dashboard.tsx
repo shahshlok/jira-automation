@@ -3,6 +3,7 @@ import { Header } from '../components/Header';
 import { Sidebar } from '../components/Sidebar/Sidebar';
 import { StoryPanel } from '../components/Story/StoryPanel';
 import { useProjects } from '../hooks/useProjects';
+import { fetchEpics } from '../api/fetchHelpers';
 import type { Story } from '../api/mockData';
 
 export default function Dashboard() {
@@ -19,6 +20,20 @@ export default function Dashboard() {
       setSelectedProjectKey(projects[0].key);
     }
   }, [projects, selectedProjectKey]);
+
+  // Fetch and log epics for project P1 on component mount
+  useEffect(() => {
+    const fetchAndLogEpics = async () => {
+      try {
+        console.log('Fetching epics for project P1...');
+        await fetchEpics('P1');
+      } catch (error) {
+        console.error('Error fetching epics for project P1:', error);
+      }
+    };
+
+    fetchAndLogEpics();
+  }, []); // Empty dependency array means this runs once on mount
 
   // Polling stub for real-time updates
   useEffect(() => {

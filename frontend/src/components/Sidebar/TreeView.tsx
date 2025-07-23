@@ -176,7 +176,7 @@ export function TreeView({ projectKey, selectedStoryKey, onStorySelect, searchFi
         return (
           <TreeNode
             key={epic.key}
-            label={`${epic.key}: ${epic.summary}`}
+            label={epic.summary}
             icon={<Folder className="h-4 w-4 text-blue-500" />}
             level={0}
             isExpanded={isEpicExpanded}

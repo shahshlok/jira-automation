@@ -97,8 +97,32 @@ export async function fetchProjects(): Promise<Project[]> {
 }
 
 export async function fetchEpics(projectKey: string): Promise<Epic[]> {
-  const response = await fetchJson<{ issues: Epic[] }>(`/rest/api/3/search?jql=project=${projectKey} AND issuetype=Epic`);
-  return response.issues;
+  if (USE_MOCK_DATA) {
+    const response = await fetchJson<{ issues: Epic[] }>(`/rest/api/3/search?jql=project=${projectKey} AND issuetype=Epic`);
+    return response.issues;
+  }
+  
+  // Call backend API to get epics from Jira
+  try {
+    const response = await fetch(`http://localhost:5000/api/epics/${projectKey}`, {
+      credentials: 'include' // Include cookies for authentication
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    // Transform Jira API response to match Epic interface
+    return data.rawResponse.issues?.map((issue: any) => ({
+      key: issue.key,
+      summary: issue.fields.summary
+    })) || [];
+  } catch (error) {
+    console.error('Failed to fetch epics:', error);
+    throw error;
+  }
 }
 
 export async function fetchStories(epicKey: string): Promise<Story[]> {
