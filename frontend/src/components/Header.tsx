@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, Loader2, LogOut } from 'lucide-react';
+import { ChevronDown, Loader2, LogOut, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useProjects } from '../hooks/useProjects';
 
 interface HeaderProps {
@@ -121,32 +122,25 @@ export function Header({ selectedProjectKey, onProjectChange, isUpdating }: Head
           </Select>
         </div>
 
-        {/* User Greeting */}
+        {/* User Profile Section */}
         {!userLoading && user && (
-          <span className="text-sm text-foreground">
-            Hello, {user.name || user.email}
-          </span>
-        )}
-
-        {/* User Avatar */}
-        <Avatar className="h-8 w-8">
-          <AvatarImage src="/avatars/current-user.jpg" alt="Current user" />
-          <AvatarFallback className="bg-brand text-brand-foreground text-sm font-medium">
-            {user?.name ? user.name.charAt(0).toUpperCase() : 'QA'}
-          </AvatarFallback>
-        </Avatar>
-
-        {/* Logout Button */}
-        {!userLoading && user && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleLogout}
-            className="flex items-center gap-2"
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="flex items-center gap-2 px-3 py-2 h-auto">
+                <User className="h-4 w-4" />
+                <span className="text-sm text-foreground">
+                  Hello, {user.name || user.email}
+                </span>
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={handleLogout} className="flex items-center gap-2 text-red-500 hover:text-red-600">
+                <LogOut className="h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     </header>
