@@ -323,26 +323,13 @@ app.all('/api/jira-proxy/*', async (req, res) => {
     console.log(`API Tester: ${req.method} ${jiraUrl}`);
     const response = await axios(config);
     
-    res.json({
-      success: true,
-      method: req.method,
-      url: jiraUrl,
-      status: response.status,
-      statusText: response.statusText,
-      data: response.data,
-      headers: response.headers
-    });
+    // Return raw Jira API response without formatting
+    res.json(response.data);
 
   } catch (error) {
     console.error('API Tester error:', error.response?.data || error.message);
-    res.status(error.response?.status || 500).json({
-      success: false,
-      method: req.method,
-      error: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data
-    });
+    // Return raw error response from Jira API without formatting
+    res.status(error.response?.status || 500).json(error.response?.data || { error: error.message });
   }
 });
 
