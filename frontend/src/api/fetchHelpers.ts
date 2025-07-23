@@ -12,7 +12,7 @@ import {
 } from './mockData';
 
 // Global flag to switch between mock and real API
-const USE_MOCK_DATA = true; // Set to false when backend is ready
+const USE_MOCK_DATA = false; // Set to false when backend is ready
 
 export async function fetchJson<T>(url: string): Promise<T> {
   if (USE_MOCK_DATA) {
@@ -65,7 +65,35 @@ export async function fetchJson<T>(url: string): Promise<T> {
 
 // Typed API functions
 export async function fetchProjects(): Promise<Project[]> {
-  return await fetchJson<Project[]>('/rest/api/3/project/recent');
+  if (USE_MOCK_DATA) {
+    return await fetchJson<Project[]>('/rest/api/3/project/recent');
+  }
+  
+  // Call backend API to get projects from Jira
+  try {
+    const response = await fetch('http://localhost:5000/api/projects', {
+      credentials: 'include' // Include cookies for authentication
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    // Transform backend response to match frontend Project interface
+    return data.projects.map((project: any) => ({
+      key: project.key,
+      name: project.name,
+      avatarUrl: project.avatarUrls?.['16x16'] || project.avatarUrls?.['24x24'] || '',
+      id: project.id,
+      projectTypeKey: project.projectTypeKey,
+      description: project.description || ''
+    }));
+  } catch (error) {
+    console.error('Failed to fetch projects:', error);
+    throw error;
+  }
 }
 
 export async function fetchEpics(projectKey: string): Promise<Epic[]> {

@@ -256,7 +256,7 @@ app.get('/api/projects', async (req, res) => {
         'Accept': 'application/json'
       }
     });
-
+    console.log("Fetched projects from Jira API v3")
     // Return the projects with metadata
     res.json({
       success: true,
