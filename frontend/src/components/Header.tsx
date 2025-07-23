@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { ChevronDown, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronDown, Loader2, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { useProjects } from '../hooks/useProjects';
 
 interface HeaderProps {
@@ -12,6 +14,49 @@ interface HeaderProps {
 
 export function Header({ selectedProjectKey, onProjectChange, isUpdating }: HeaderProps) {
   const { data: projects, isLoading } = useProjects();
+  const [user, setUser] = useState<any>(null);
+  const [userLoading, setUserLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchUserInfo();
+  }, []);
+
+  const fetchUserInfo = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/auth/me', {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          navigate('/', { replace: true });
+          return;
+        }
+        throw new Error('Failed to fetch user info');
+      }
+
+      const userData = await response.json();
+      setUser(userData);
+    } catch (err) {
+      console.error('Error fetching user info:', err);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('http://localhost:5000/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      navigate('/', { replace: true });
+    } catch (err) {
+      console.error('Logout error:', err);
+      navigate('/', { replace: true });
+    }
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-border z-50 flex items-center justify-between px-6">
@@ -42,7 +87,7 @@ export function Header({ selectedProjectKey, onProjectChange, isUpdating }: Head
         )}
       </div>
 
-      {/* Right: Project Picker & User Avatar */}
+      {/* Right: Project Picker, User Greeting & Logout */}
       <div className="flex items-center gap-4">
         {/* Project Picker */}
         <div className="flex items-center gap-2">
@@ -76,13 +121,33 @@ export function Header({ selectedProjectKey, onProjectChange, isUpdating }: Head
           </Select>
         </div>
 
+        {/* User Greeting */}
+        {!userLoading && user && (
+          <span className="text-sm text-foreground">
+            Hello, {user.name || user.email}
+          </span>
+        )}
+
         {/* User Avatar */}
         <Avatar className="h-8 w-8">
           <AvatarImage src="/avatars/current-user.jpg" alt="Current user" />
           <AvatarFallback className="bg-brand text-brand-foreground text-sm font-medium">
-            QA
+            {user?.name ? user.name.charAt(0).toUpperCase() : 'QA'}
           </AvatarFallback>
         </Avatar>
+
+        {/* Logout Button */}
+        {!userLoading && user && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            className="flex items-center gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
+        )}
       </div>
     </header>
   );
