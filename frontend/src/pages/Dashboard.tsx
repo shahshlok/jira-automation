@@ -3,14 +3,20 @@ import { Header } from '../components/Header';
 import { Sidebar } from '../components/Sidebar/Sidebar';
 import { StoryPanel } from '../components/Story/StoryPanel';
 import { useProjects } from '../hooks/useProjects';
-import { fetchEpics } from '../api/fetchHelpers';
-import type { Story } from '../api/mockData';
+import { fetchEpics, fetchStories } from '../api/fetchHelpers';
+import type { Story, Epic } from '../api/mockData';
+
+// Extended Epic type to include stories
+export type EpicWithStories = Epic & {
+  stories: Story[];
+};
 
 export default function Dashboard() {
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
   const [selectedStoryKey, setSelectedStoryKey] = useState<string | null>(null);
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [epicsWithStories, setEpicsWithStories] = useState<EpicWithStories[]>([]);
   
   const { data: projects } = useProjects();
 
@@ -21,19 +27,53 @@ export default function Dashboard() {
     }
   }, [projects, selectedProjectKey]);
 
-  // Fetch and log epics for project P1 on component mount
+  // Fetch epics and stories when project changes
   useEffect(() => {
-    const fetchAndLogEpics = async () => {
+    const fetchProjectData = async () => {
+      if (!selectedProjectKey) {
+        setEpicsWithStories([]);
+        return;
+      }
+
       try {
-        console.log('Fetching epics for project P1...');
-        await fetchEpics('P1');
+        console.log(`Fetching epics and stories for project ${selectedProjectKey}...`);
+        
+        // Fetch epics and stories in parallel
+        const [epics, stories] = await Promise.all([
+          fetchEpics(selectedProjectKey),
+          fetchStories(selectedProjectKey)
+        ]);
+        
+        // Group stories by their Epic Link
+        const storiesByEpic: Record<string, Story[]> = {};
+        
+        stories.forEach(story => {
+          const epicKey = story.epicLink;
+          if (epicKey) {
+            if (!storiesByEpic[epicKey]) {
+              storiesByEpic[epicKey] = [];
+            }
+            storiesByEpic[epicKey].push(story);
+          }
+        });
+        
+        // Combine epics with their stories
+        const epicsWithStoriesData: EpicWithStories[] = epics.map(epic => ({
+          ...epic,
+          stories: storiesByEpic[epic.key] || []
+        }));
+        
+        setEpicsWithStories(epicsWithStoriesData);
+        
+        console.log(`✅ Fetched ${epics.length} epics and ${stories.length} stories for project ${selectedProjectKey}`);
       } catch (error) {
-        console.error('Error fetching epics for project P1:', error);
+        console.error(`Error fetching data for project ${selectedProjectKey}:`, error);
+        setEpicsWithStories([]);
       }
     };
 
-    fetchAndLogEpics();
-  }, []); // Empty dependency array means this runs once on mount
+    fetchProjectData();
+  }, [selectedProjectKey]);
 
   // Polling stub for real-time updates
   useEffect(() => {
@@ -72,6 +112,7 @@ export default function Dashboard() {
         {/* Sidebar */}
         <Sidebar
           projectKey={selectedProjectKey}
+          epicsWithStories={epicsWithStories}
           selectedStoryKey={selectedStoryKey}
           onStorySelect={handleStorySelect}
         />

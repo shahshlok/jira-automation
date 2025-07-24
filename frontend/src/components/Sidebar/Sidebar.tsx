@@ -6,14 +6,16 @@ import { Button } from '@/components/ui/button';
 import { SearchBox } from './SearchBox';
 import { TreeView } from './TreeView';
 import type { Story } from '../../api/mockData';
+import type { EpicWithStories } from '../../pages/Dashboard';
 
 interface SidebarProps {
   projectKey: string | null;
+  epicsWithStories: EpicWithStories[];
   selectedStoryKey: string | null;
   onStorySelect: (storyKey: string, story: Story) => void;
 }
 
-export function Sidebar({ projectKey, selectedStoryKey, onStorySelect }: SidebarProps) {
+export function Sidebar({ projectKey, epicsWithStories, selectedStoryKey, onStorySelect }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const navigate = useNavigate();
@@ -77,6 +79,7 @@ export function Sidebar({ projectKey, selectedStoryKey, onStorySelect }: Sidebar
             <div className="flex-1 overflow-y-auto">
               <TreeView
                 projectKey={projectKey}
+                epicsWithStories={epicsWithStories}
                 selectedStoryKey={selectedStoryKey}
                 onStorySelect={onStorySelect}
                 searchFilter={searchFilter}

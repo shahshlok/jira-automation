@@ -125,9 +125,51 @@ export async function fetchEpics(projectKey: string): Promise<Epic[]> {
   }
 }
 
-export async function fetchStories(epicKey: string): Promise<Story[]> {
-  const response = await fetchJson<{ issues: Story[] }>(`/rest/api/3/search?jql="Epic Link"=${epicKey} AND issuetype=Story`);
-  return response.issues;
+export async function fetchStories(projectKey: string): Promise<Story[]> {
+  if (USE_MOCK_DATA) {
+    const response = await fetchJson<{ issues: Story[] }>(`/rest/api/3/search?jql=project=${projectKey} AND issuetype=Story`);
+    return response.issues;
+  }
+  
+  // Call backend API to get stories from Jira
+  try {
+    const response = await fetch(`http://localhost:5000/api/stories/${projectKey}`, {
+      credentials: 'include' // Include cookies for authentication
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    // Filter for stories only and transform Jira API response to match Story interface
+    const transformedStories = data.rawResponse.issues
+      ?.filter((issue: any) => issue.fields.issuetype.name === 'Story')
+      ?.map((issue: any) => {
+        const parentKey = issue.fields.parent?.key;
+        
+        return {
+          key: issue.key,
+          summary: issue.fields.summary,
+          assignee: issue.fields.assignee ? {
+            displayName: issue.fields.assignee.displayName,
+            avatarUrl: issue.fields.assignee.avatarUrls?.['24x24'] || ''
+          } : undefined,
+          priority: {
+            name: issue.fields.priority?.name || 'Medium',
+            iconUrl: issue.fields.priority?.iconUrl || ''
+          },
+          updated: issue.fields.updated,
+          epicLink: parentKey // Use parent.key as Epic Link
+        };
+      }) || [];
+    
+    return transformedStories;
+  } catch (error) {
+    console.error('Failed to fetch stories:', error);
+    throw error;
+  }
 }
 
 export async function fetchTestCases(storyKey: string): Promise<TestCase[]> {

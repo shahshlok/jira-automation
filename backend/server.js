@@ -340,6 +340,61 @@ app.get('/api/epics/:projectKey', async (req, res) => {
   }
 });
 
+app.get('/api/stories/:projectKey', async (req, res) => {
+  const token = req.cookies.jira_auth;
+  const { projectKey } = req.params;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  if (!projectKey) {
+    return res.status(400).json({ error: 'Project key is required' });
+  }
+
+  try {
+    // Get cloudId from session cache
+    const siteInfo = await getCloudId(req);
+    
+    // Fetch stories using JQL search
+    console.log(`Fetching stories for project ${projectKey} from Jira API v3...`);
+    const storiesResponse = await axios.get(`https://api.atlassian.com/ex/jira/${siteInfo.cloudId}/rest/api/3/search`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      },
+      params: {
+        jql: `project=${projectKey} AND issuetype=Story AND parent IS NOT EMPTY`
+      }
+    });
+    
+    console.log(`Fetched ${storiesResponse.data.issues.length} stories for project ${projectKey}`);
+    
+    // Return the stories with metadata
+    res.json({
+      success: true,
+      projectKey: projectKey,
+      totalStories: storiesResponse.data.issues.length,
+      rawResponse: storiesResponse.data
+    });
+
+  } catch (error) {
+    console.error('Stories fetch error:', error.response?.data || error.message);
+    console.error('Error status:', error.response?.status);
+    
+    if (error.response?.status === 401) {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    } else if (error.response?.status === 403) {
+      res.status(403).json({ error: 'Insufficient permissions to access stories' });
+    } else {
+      res.status(500).json({ 
+        error: 'Failed to fetch stories', 
+        details: error.response?.data || error.message 
+      });
+    }
+  }
+});
+
 // API Tester endpoint - proxies requests to Jira API
 app.all('/api/jira-proxy/*', async (req, res) => {
   const token = req.cookies.jira_auth;

@@ -24,6 +24,7 @@ export interface Story {
     iconUrl: string;
   };
   updated: string;
+  epicLink?: string; // Epic Link field (customfield_10008)
 }
 
 export interface TestCase {
