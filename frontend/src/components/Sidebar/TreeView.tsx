@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Folder, File, Bug } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useQueries } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
-import { useEpics } from '../../hooks/useEpics';
-import { fetchStories } from '../../api/fetchHelpers';
-import type { Epic, Story } from '../../api/mockData';
+import type { Story } from '../../api/mockData';
+import type { EpicWithStories } from '../../pages/Dashboard';
 
 interface TreeViewProps {
   projectKey: string | null;
+  epicsWithStories: EpicWithStories[];
   selectedStoryKey: string | null;
   onStorySelect: (storyKey: string, story: Story) => void;
   searchFilter: string;
@@ -102,20 +101,8 @@ function TreeNode({
   );
 }
 
-export function TreeView({ projectKey, selectedStoryKey, onStorySelect, searchFilter }: TreeViewProps) {
+export function TreeView({ projectKey, epicsWithStories, selectedStoryKey, onStorySelect, searchFilter }: TreeViewProps) {
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(new Set());
-  const { data: epics, isLoading: epicsLoading } = useEpics(projectKey);
-  
-  // Fetch stories for all expanded epics using useQueries
-  const epicKeys = Array.from(expandedEpics);
-  const storiesQueries = useQueries({
-    queries: epicKeys.map(epicKey => ({
-      queryKey: ['stories', epicKey],
-      queryFn: () => fetchStories(epicKey),
-      enabled: !!epicKey,
-      staleTime: 5 * 60 * 1000,
-    }))
-  });
 
   const toggleEpic = (epicKey: string) => {
     const newExpanded = new Set(expandedEpics);
@@ -127,21 +114,40 @@ export function TreeView({ projectKey, selectedStoryKey, onStorySelect, searchFi
     setExpandedEpics(newExpanded);
   };
 
-  // Auto-expand epic containing selected story
+  // Auto-expand epics that have stories and epic containing selected story
   useEffect(() => {
-    if (selectedStoryKey && epics) {
-      // Find which epic contains this story (simplified check by prefix)
-      const epicKey = selectedStoryKey.split('-').slice(0, 2).join('-');
-      if (epics.some(epic => epic.key === epicKey)) {
-        setExpandedEpics(prev => new Set([...prev, epicKey]));
+    if (epicsWithStories && epicsWithStories.length > 0) {
+      const newExpanded = new Set(expandedEpics);
+      
+      // Auto-expand epics that have stories
+      epicsWithStories.forEach(epic => {
+        if (epic.stories && epic.stories.length > 0) {
+          newExpanded.add(epic.key);
+        }
+      });
+      
+      // Also expand epic containing selected story
+      if (selectedStoryKey) {
+        const epic = epicsWithStories.find(epic => 
+          epic.stories.some(story => story.key === selectedStoryKey)
+        );
+        if (epic) {
+          newExpanded.add(epic.key);
+        }
       }
+      
+      setExpandedEpics(newExpanded);
     }
-  }, [selectedStoryKey, epics]);
+  }, [selectedStoryKey, epicsWithStories]);
 
-  const filteredEpics = epics?.filter(epic => 
+  const filteredEpics = epicsWithStories.filter(epic => 
     epic.summary.toLowerCase().includes(searchFilter.toLowerCase()) ||
-    epic.key.toLowerCase().includes(searchFilter.toLowerCase())
-  ) || [];
+    epic.key.toLowerCase().includes(searchFilter.toLowerCase()) ||
+    epic.stories.some(story => 
+      story.summary.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      story.key.toLowerCase().includes(searchFilter.toLowerCase())
+    )
+  );
 
   if (!projectKey) {
     return (
@@ -152,23 +158,12 @@ export function TreeView({ projectKey, selectedStoryKey, onStorySelect, searchFi
     );
   }
 
-  if (epicsLoading) {
-    return (
-      <div className="p-4 text-center text-muted-foreground">
-        <div className="animate-spin h-6 w-6 border-2 border-brand border-t-transparent rounded-full mx-auto mb-2" />
-        <p>Loading epics...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="py-2" role="tree">
-      {filteredEpics.map((epic, epicIndex) => {
+      {filteredEpics.map((epic) => {
         const isEpicExpanded = expandedEpics.has(epic.key);
-        const queryIndex = epicKeys.indexOf(epic.key);
-        const storiesData = queryIndex >= 0 ? storiesQueries[queryIndex]?.data || [] : [];
         
-        const filteredStories = storiesData.filter(story =>
+        const filteredStories = epic.stories.filter(story =>
           story.summary.toLowerCase().includes(searchFilter.toLowerCase()) ||
           story.key.toLowerCase().includes(searchFilter.toLowerCase())
         );
