@@ -25,12 +25,13 @@ export async function GET(request: NextRequest) {
 
   try {
     // Exchange code for access token
+    const redirectUri = process.env.REDIRECT_URI || `${request.nextUrl.origin}/api/auth/callback`;
     const tokenData = new URLSearchParams({
       grant_type: 'authorization_code',
       client_id: process.env.CLIENT_ID!,
       client_secret: process.env.CLIENT_SECRET!,
       code: code, 
-      redirect_uri: process.env.REDIRECT_URI!
+      redirect_uri: redirectUri
     });
 
     const tokenResponse = await axios.post('https://auth.atlassian.com/oauth/token', tokenData, {
