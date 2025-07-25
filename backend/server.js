@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import session from 'express-session';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import { extractTestCasesFromStory } from './src/extractTestCasesFromStory.js';
 
 dotenv.config();
 
@@ -389,6 +390,48 @@ app.get('/api/stories/:projectKey', async (req, res) => {
     } else {
       res.status(500).json({ 
         error: 'Failed to fetch stories', 
+        details: error.response?.data || error.message 
+      });
+    }
+  }
+});
+
+app.get('/api/testcases/:storyKey', async (req, res) => {
+  const { storyKey } = req.params;
+  const token = req.cookies.jira_auth;
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  try {
+    const siteInfo = await getCloudId(req);
+    const storyRes = await axios.get(
+      `https://api.atlassian.com/ex/jira/${siteInfo.cloudId}/rest/api/3/issue/${storyKey}`,
+      { 
+        headers: { Authorization: `Bearer ${token}` },
+        params: { 
+          fields: 'subtasks',
+          expand: 'subtasks'
+        }
+      }
+    );
+
+    console.log(`Fetched story ${storyKey} with subtasks:`, JSON.stringify(storyRes.data.fields?.subtasks, null, 2));
+    
+    const testCases = extractTestCasesFromStory(storyRes.data);
+    console.log(`Extracted ${testCases.length} test cases for story ${storyKey}:`, testCases);
+    
+    res.json({ storyKey, testCases });
+  } catch (error) {
+    console.error('Test cases fetch error:', error.response?.data || error.message);
+    if (error.response?.status === 401) {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    } else if (error.response?.status === 404) {
+      res.status(404).json({ error: 'Story not found' });
+    } else {
+      res.status(500).json({ 
+        error: 'Failed to fetch test cases', 
         details: error.response?.data || error.message 
       });
     }

@@ -1,32 +1,51 @@
 import { cn } from '@/lib/utils';
-import type { TestCase } from '../../api/mockData';
 
 interface StatusPillProps {
-  status: TestCase['status'];
+  status: string;
   className?: string;
 }
 
-const statusConfig = {
-  'Pending': {
-    className: 'bg-gray-300 text-gray-800',
-    label: 'Pending'
-  },
-  'Breaking': {
-    className: 'bg-red-500/20 text-red-700',
-    label: 'Breaking'
-  },
-  'Partial Passing': {
-    className: 'bg-amber-400/20 text-amber-700',
-    label: 'Partial'
-  },
-  'Passing': {
-    className: 'bg-green-500/20 text-green-700',
-    label: 'Passing'
+const getStatusConfig = (status: string) => {
+  // Map common Jira status names to colors
+  const lowerStatus = status.toLowerCase();
+  
+  if (lowerStatus.includes('pass')) {
+    return {
+      className: 'bg-green-500/20 text-green-700',
+      label: 'Passing'
+    };
   }
-} as const;
+  
+  if (lowerStatus.includes('partial')) {
+    return {
+      className: 'bg-amber-400/20 text-amber-700',
+      label: 'Partial'
+    };
+  }
+  
+  if (lowerStatus.includes('break') || lowerStatus.includes('fail')) {
+    return {
+      className: 'bg-red-500/20 text-red-700',
+      label: 'Breaking'
+    };
+  }
+  
+  if (lowerStatus.includes('backlog')) {
+    return {
+      className: 'bg-slate-400/20 text-slate-700',
+      label: 'Backlog'
+    };
+  }
+  
+  // Default for pending, unknown, etc.
+  return {
+    className: 'bg-gray-300 text-gray-800',
+    label: status
+  };
+};
 
 export function StatusPill({ status, className }: StatusPillProps) {
-  const config = statusConfig[status];
+  const config = getStatusConfig(status);
   
   return (
     <span

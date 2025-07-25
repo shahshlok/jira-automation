@@ -8,7 +8,7 @@ import {
   Project,
   Epic,
   Story,
-  TestCase
+  TestCase as MockTestCase
 } from './mockData';
 
 // Global flag to switch between mock and real API
@@ -172,7 +172,25 @@ export async function fetchStories(projectKey: string): Promise<Story[]> {
   }
 }
 
-export async function fetchTestCases(storyKey: string): Promise<TestCase[]> {
-  const response = await fetchJson<{ cases: TestCase[] }>(`/stories/${storyKey}/testcases`);
+export interface TestCase { 
+  key: string; 
+  summary: string; 
+  status: string 
+}
+
+export async function fetchTestCasesForStory(storyKey: string): Promise<TestCase[]> {
+  console.log(`🔍 Fetching test cases for story: ${storyKey}`);
+  const res = await fetch(`http://localhost:5000/api/testcases/${storyKey}`, { credentials: 'include' });
+  if (!res.ok) {
+    console.error(`❌ Failed to fetch test cases for ${storyKey}:`, res.status, res.statusText);
+    throw new Error(await res.text());
+  }
+  const data = await res.json();
+  console.log(`✅ Received test cases for ${storyKey}:`, data);
+  return data.testCases;
+}
+
+export async function fetchTestCases(storyKey: string): Promise<MockTestCase[]> {
+  const response = await fetchJson<{ cases: MockTestCase[] }>(`/stories/${storyKey}/testcases`);
   return response.cases;
 }
