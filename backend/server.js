@@ -55,7 +55,7 @@ async function fetchAccessibleResources(token) {
 async function getCloudId(req) {
   // First, try to get from session (cached)
   if (req.session.cloudId) {
-    console.log('Using cached cloudId:', req.session.cloudId);
+    console.log('Using cached cloudId');
     return {
       cloudId: req.session.cloudId,
       siteName: req.session.siteName,
@@ -76,7 +76,7 @@ async function getCloudId(req) {
   req.session.siteName = primarySite.name;
   req.session.siteUrl = primarySite.url;
   
-  console.log('CloudId fetched and cached:', primarySite.id);
+  console.log('CloudId fetched and cached.');
   
   return {
     cloudId: primarySite.id,
@@ -416,11 +416,9 @@ app.get('/api/testcases/:storyKey', async (req, res) => {
         }
       }
     );
-
-    console.log(`Fetched story ${storyKey} with subtasks:`, JSON.stringify(storyRes.data.fields?.subtasks, null, 2));
     
     const testCases = extractTestCasesFromStory(storyRes.data);
-    console.log(`Extracted ${testCases.length} test cases for story ${storyKey}:`, testCases);
+    console.log(`Extracted ${testCases.length} test cases for story ${storyKey}.`);
     
     res.json({ storyKey, testCases });
   } catch (error) {
