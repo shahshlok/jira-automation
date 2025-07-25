@@ -176,7 +176,7 @@ export default function Dashboard() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [selectedEpic, setSelectedEpic] = useState<EpicWithStories | null>(null)
   const [selectedStory, setSelectedStory] = useState<Story | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [currentTime, setCurrentTime] = useState(new Date())
@@ -300,7 +300,6 @@ export default function Dashboard() {
   const handleProjectChange = (project: Project) => {
     setSelectedProject(project);
     saveProject(project.key);
-    setSidebarOpen(false);
     setSelectedEpic(null);
     setSelectedStory(null);
   };
@@ -343,9 +342,7 @@ export default function Dashboard() {
   return (
     <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Left Sidebar */}
-      <div
-        className={`bg-white border-r border-gray-200 transition-all duration-300 ${sidebarOpen ? "w-80" : "w-0"} overflow-hidden`}
-      >
+      <div className="bg-white border-r border-gray-200 w-80">
         <div className="p-6 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Projects</h2>
           <p className="text-sm text-gray-500 mt-1">{projects.length} active projects</p>
@@ -392,13 +389,6 @@ export default function Dashboard() {
         <header className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-600">
-                <div className="w-4 h-4 flex flex-col justify-center space-y-1">
-                  <div className="w-full h-0.5 bg-current"></div>
-                  <div className="w-full h-0.5 bg-current"></div>
-                  <div className="w-full h-0.5 bg-current"></div>
-                </div>
-              </Button>
               <h1 className="text-xl font-bold text-gray-900">DX Test Hub</h1>
               {selectedProject && (
                 <Badge variant="outline" className="border-emerald-200 text-slate-50 border bg-green-500">
