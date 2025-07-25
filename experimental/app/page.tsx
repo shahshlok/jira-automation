@@ -546,8 +546,8 @@ export default function Dashboard() {
                     })}
                   </div>
                 </div>
-              ) : !selectedStory ? (
-                // Story View
+              ) : (
+                // Story View - always show when an epic is selected
                 <div className="p-8">
                   <div className="mb-6">
                     <Button variant="ghost" size="sm" onClick={() => setSelectedEpic(null)} className="mb-4">
@@ -712,9 +712,6 @@ export default function Dashboard() {
                     })}
                   </div>
                 </div>
-              ) : (
-                // Test View
-                <></>
               )}
             </div>
           </div>
