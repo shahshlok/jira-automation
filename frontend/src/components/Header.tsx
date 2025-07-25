@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useProjects } from '../hooks/useProjects';
+import { clearProject } from '../utils/projectStorage';
 
 interface HeaderProps {
   selectedProjectKey: string | null;
@@ -52,9 +53,11 @@ export function Header({ selectedProjectKey, onProjectChange, isUpdating }: Head
         method: 'POST',
         credentials: 'include'
       });
+      clearProject();
       navigate('/', { replace: true });
     } catch (err) {
       console.error('Logout error:', err);
+      clearProject();
       navigate('/', { replace: true });
     }
   };

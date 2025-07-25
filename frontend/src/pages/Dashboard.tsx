@@ -4,6 +4,7 @@ import { Sidebar } from '../components/Sidebar/Sidebar';
 import { StoryPanel } from '../components/Story/StoryPanel';
 import { useProjects } from '../hooks/useProjects';
 import { fetchEpics, fetchStories } from '../api/fetchHelpers';
+import { loadProject, saveProject } from '../utils/projectStorage';
 import type { Story, Epic } from '../api/mockData';
 
 // Extended Epic type to include stories
@@ -12,7 +13,9 @@ export type EpicWithStories = Epic & {
 };
 
 export default function Dashboard() {
-  const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
+  const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(() => 
+    loadProject() || null
+  );
   const [selectedStoryKey, setSelectedStoryKey] = useState<string | null>(null);
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -20,10 +23,15 @@ export default function Dashboard() {
   
   const { data: projects } = useProjects();
 
-  // Auto-select first project when projects load
+  // Sync after /api/projects fetch
   useEffect(() => {
     if (projects && projects.length > 0 && !selectedProjectKey) {
-      setSelectedProjectKey(projects[0].key);
+      const stored = loadProject();
+      const fallback = projects[0]?.key;
+      const projectToSelect = stored && projects.some(p => p.key === stored) ? stored : fallback;
+      if (projectToSelect) {
+        setSelectedProjectKey(projectToSelect);
+      }
     }
   }, [projects, selectedProjectKey]);
 
@@ -86,8 +94,9 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  const handleProjectChange = (projectKey: string) => {
-    setSelectedProjectKey(projectKey);
+  const handleProjectChange = (newKey: string) => {
+    setSelectedProjectKey(newKey);
+    saveProject(newKey);
     // Clear story selection when project changes
     setSelectedStoryKey(null);
     setSelectedStory(null);
