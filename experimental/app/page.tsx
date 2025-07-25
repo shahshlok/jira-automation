@@ -18,122 +18,39 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { fetchProjects, fetchEpics, fetchStories, fetchTestCases, checkAuth, logout, Project, Epic, Story, TestCase } from "@/lib/apiHelpers"
+import { saveProject, loadProject, clearProject } from "@/lib/projectStorage"
 
-// Mock data
-const projects = [
-  { id: 1, name: "E-Commerce Platform", passRate: 87, stories: 45, epics: 8 },
-  { id: 2, name: "Mobile Banking App", passRate: 92, stories: 32, epics: 6 },
-  { id: 3, name: "Healthcare Portal", passRate: 78, stories: 28, epics: 5 },
-  { id: 4, name: "Analytics Dashboard", passRate: 95, stories: 22, epics: 4 },
-  { id: 5, name: "Social Media API", passRate: 83, stories: 38, epics: 7 },
-  { id: 6, name: "Payment Gateway", passRate: 89, stories: 19, epics: 3 },
-  { id: 7, name: "Content Management", passRate: 76, stories: 41, epics: 9 },
-  { id: 8, name: "User Authentication", passRate: 94, stories: 15, epics: 3 },
-]
-
-const epics = [
-  { id: 1, name: "User Registration", stories: 8, passRate: 85, height: 8 },
-  { id: 2, name: "Product Catalog", stories: 12, passRate: 92, height: 12 },
-  { id: 3, name: "Shopping Cart", stories: 6, passRate: 78, height: 6 },
-  { id: 4, name: "Payment Processing", stories: 10, passRate: 88, height: 10 },
-  { id: 5, name: "Order Management", stories: 9, passRate: 91, height: 9 },
-  { id: 6, name: "User Profile", stories: 7, passRate: 83, height: 7 },
-  { id: 7, name: "Notifications", stories: 5, passRate: 95, height: 5 },
-  { id: 8, name: "Analytics", stories: 4, passRate: 87, height: 4 },
-]
-
-const stories = [
-  {
-    id: 1,
-    name: "User can create account with valid email",
-    passRate: 90,
-    tests: 8,
-    passing: 7,
-    partial: 1,
-    breaking: 0,
-    pending: 0,
-    status: "passing",
-  },
-  {
-    id: 2,
-    name: "Email verification works correctly",
-    passRate: 85,
-    tests: 5,
-    passing: 4,
-    partial: 0,
-    breaking: 1,
-    pending: 0,
-    status: "passing",
-  },
-  {
-    id: 3,
-    name: "Password reset flow functions properly",
-    passRate: 70,
-    tests: 6,
-    passing: 3,
-    partial: 2,
-    breaking: 1,
-    pending: 0,
-    status: "partial",
-  },
-  {
-    id: 4,
-    name: "Social login integration with OAuth providers",
-    passRate: 45,
-    tests: 4,
-    passing: 1,
-    partial: 1,
-    breaking: 2,
-    pending: 0,
-    status: "breaking",
-  },
-  {
-    id: 5,
-    name: "Profile completion wizard guides users",
-    passRate: 95,
-    tests: 7,
-    passing: 6,
-    partial: 1,
-    breaking: 0,
-    pending: 0,
-    status: "passing",
-  },
-  {
-    id: 6,
-    name: "Account deactivation process handles cleanup",
-    passRate: 0,
-    tests: 3,
-    passing: 0,
-    partial: 0,
-    breaking: 0,
-    pending: 3,
-    status: "pending",
-  },
-]
-
-const tests = [
-  { id: 1, name: "Valid email format validation", status: "passing", duration: "1.2s" },
-  { id: 2, name: "Password strength requirements", status: "passing", duration: "0.8s" },
-  { id: 3, name: "Duplicate email prevention", status: "passing", duration: "2.1s" },
-  { id: 4, name: "Terms acceptance required", status: "breaking", duration: "0.5s" },
-  { id: 5, name: "Age verification check", status: "partial", duration: "1.8s" },
-  { id: 6, name: "GDPR compliance fields", status: "pending", duration: "-" },
-  {id: 7, name: "Here is one more test case coz why not", status: "pending"}
-]
+// Extended Epic type to include stories
+export type EpicWithStories = Epic & {
+  stories: Story[];
+};
 
 // Helper function to calculate aggregated test data for epics
-const getEpicAggregatedData = (epicId: number) => {
-  // Get all stories for this epic (in real app, this would be filtered by epic)
-  const epicStories = stories.slice(0, Math.min(stories.length, 4)) // Mock: take first 4 stories for this epic
-
-  const aggregated = epicStories.reduce(
-    (acc, story) => ({
-      passing: acc.passing + story.passing,
-      partial: acc.partial + story.partial,
-      breaking: acc.breaking + story.breaking,
-      pending: acc.pending + story.pending,
-      tests: acc.tests + story.tests,
-    }),
+const getEpicAggregatedData = (stories: Story[], testCasesByStory: Record<string, TestCase[]>) => {
+  const aggregated = stories.reduce(
+    (acc, story) => {
+      const testCases = testCasesByStory[story.key] || [];
+      const storyStats = testCases.reduce(
+        (storyAcc, tc) => {
+          const status = tc.status.toLowerCase();
+          if (status.includes('pass')) storyAcc.passing++;
+          else if (status.includes('partial')) storyAcc.partial++;
+          else if (status.includes('break') || status.includes('fail')) storyAcc.breaking++;
+          else storyAcc.pending++;
+          return storyAcc;
+        },
+        { passing: 0, partial: 0, breaking: 0, pending: 0 }
+      );
+      
+      return {
+        passing: acc.passing + storyStats.passing,
+        partial: acc.partial + storyStats.partial,
+        breaking: acc.breaking + storyStats.breaking,
+        pending: acc.pending + storyStats.pending,
+        tests: acc.tests + testCases.length,
+      };
+    },
     { passing: 0, partial: 0, breaking: 0, pending: 0, tests: 0 },
   )
 
@@ -155,6 +72,10 @@ const StackedProgressBar = ({
   pending: number
   total: number
 }) => {
+  if (total === 0) {
+    return <div className="w-full h-2 bg-gray-200 rounded-full" />;
+  }
+
   const passingPercent = (passing / total) * 100
   const partialPercent = (partial / total) * 100
   const breakingPercent = (breaking / total) * 100
@@ -245,27 +166,130 @@ const StatusDistributionPieChart = ({
   )
 }
 
-export default function PrismUniverse() {
-  const [selectedProject, setSelectedProject] = useState(projects[0])
-  const [selectedEpic, setSelectedEpic] = useState<(typeof epics)[0] | null>(null)
-  const [selectedStory, setSelectedStory] = useState<(typeof stories)[0] | null>(null)
+export default function Dashboard() {
+  // Data state
+  const [projects, setProjects] = useState<Project[]>([])
+  const [epicsWithStories, setEpicsWithStories] = useState<EpicWithStories[]>([])
+  const [testCasesByStory, setTestCasesByStory] = useState<Record<string, TestCase[]>>({})
+  
+  // UI state
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const [selectedEpic, setSelectedEpic] = useState<EpicWithStories | null>(null)
+  const [selectedStory, setSelectedStory] = useState<Story | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [currentTime, setCurrentTime] = useState(new Date())
-  const [filter, setFilter] = useState("all")
+  
+  // Loading states
+  const [loadingProjects, setLoadingProjects] = useState(true)
+  const [loadingData, setLoadingData] = useState(false)
+  const [user, setUser] = useState<any>(null)
 
-  const [user] = useState({
-    name: "Alex Chen",
-    email: "alex.chen@company.com",
-    avatar: "/placeholder.svg?height=32&width=32",
-  })
+  // Load user info and projects on mount
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        // Load user info
+        const userData = await checkAuth();
+        setUser(userData);
+        
+        // Load projects
+        const projectsData = await fetchProjects();
+        setProjects(projectsData);
+        
+        // Restore selected project from localStorage
+        const storedProjectKey = loadProject();
+        let projectToSelect = projectsData[0]; // Default to first project
+        
+        if (storedProjectKey) {
+          const storedProject = projectsData.find(p => p.key === storedProjectKey);
+          if (storedProject) {
+            projectToSelect = storedProject;
+          }
+        }
+        
+        if (projectToSelect) {
+          setSelectedProject(projectToSelect);
+          saveProject(projectToSelect.key);
+        }
+      } catch (error) {
+        console.error('Failed to load initial data:', error);
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
 
-  const handleLogout = () => {
-    // Handle logout logic here
-    console.log("User logged out")
-  }
+    loadInitialData();
+  }, []);
 
+  // Load epics and stories when project changes
+  useEffect(() => {
+    const loadProjectData = async () => {
+      if (!selectedProject) {
+        setEpicsWithStories([]);
+        return;
+      }
+
+      setLoadingData(true);
+      try {
+        const [epics, stories] = await Promise.all([
+          fetchEpics(selectedProject.key),
+          fetchStories(selectedProject.key)
+        ]);
+        
+        // Group stories by their Epic Link
+        const storiesByEpic: Record<string, Story[]> = {};
+        
+        stories.forEach(story => {
+          const epicKey = story.epicLink;
+          if (epicKey) {
+            if (!storiesByEpic[epicKey]) {
+              storiesByEpic[epicKey] = [];
+            }
+            storiesByEpic[epicKey].push(story);
+          }
+        });
+        
+        // Combine epics with their stories
+        const epicsWithStoriesData: EpicWithStories[] = epics.map(epic => ({
+          ...epic,
+          stories: storiesByEpic[epic.key] || []
+        }));
+        
+        setEpicsWithStories(epicsWithStoriesData);
+        
+        // Load test cases for all stories
+        const testCasesPromises = stories.map(async (story) => {
+          try {
+            const testCases = await fetchTestCases(story.key);
+            return { storyKey: story.key, testCases };
+          } catch (error) {
+            console.error(`Failed to load test cases for ${story.key}:`, error);
+            return { storyKey: story.key, testCases: [] };
+          }
+        });
+        
+        const testCasesResults = await Promise.all(testCasesPromises);
+        const testCasesMap: Record<string, TestCase[]> = {};
+        testCasesResults.forEach(result => {
+          testCasesMap[result.storyKey] = result.testCases;
+        });
+        
+        setTestCasesByStory(testCasesMap);
+        
+      } catch (error) {
+        console.error('Error fetching project data:', error);
+        setEpicsWithStories([]);
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    loadProjectData();
+  }, [selectedProject]);
+
+  // Update clock
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date())
@@ -273,41 +297,47 @@ export default function PrismUniverse() {
     return () => clearInterval(timer)
   }, [])
 
-  const getPassRateColor = (rate: number) => {
-    if (rate >= 90) return "bg-emerald-500"
-    if (rate >= 70) return "bg-amber-500"
-    if (rate >= 50) return "bg-orange-500"
-    return "bg-red-500"
-  }
+  const handleProjectChange = (project: Project) => {
+    setSelectedProject(project);
+    saveProject(project.key);
+    setSidebarOpen(false);
+    setSelectedEpic(null);
+    setSelectedStory(null);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      clearProject();
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout error:', error);
+      window.location.href = '/login';
+    }
+  };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "passing":
-        return "text-emerald-600 bg-emerald-50"
-      case "partial":
-        return "text-amber-600 bg-amber-50"
-      case "breaking":
-        return "text-red-600 bg-red-50"
-      case "pending":
-        return "text-gray-600 bg-gray-50"
-      default:
-        return "text-gray-600 bg-gray-50"
-    }
+    const lowerStatus = status.toLowerCase();
+    if (lowerStatus.includes('pass')) return "text-emerald-600 bg-emerald-50";
+    if (lowerStatus.includes('partial')) return "text-amber-600 bg-amber-50";
+    if (lowerStatus.includes('break') || lowerStatus.includes('fail')) return "text-red-600 bg-red-50";
+    return "text-gray-600 bg-gray-50";
   }
 
   const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "passing":
-        return <CheckCircle className="w-4 h-4" />
-      case "partial":
-        return <AlertTriangle className="w-4 h-4" />
-      case "breaking":
-        return <XCircle className="w-4 h-4" />
-      case "pending":
-        return <Clock className="w-4 h-4" />
-      default:
-        return <Clock className="w-4 h-4" />
-    }
+    const lowerStatus = status.toLowerCase();
+    if (lowerStatus.includes('pass')) return <CheckCircle className="w-4 h-4" />;
+    if (lowerStatus.includes('partial')) return <AlertTriangle className="w-4 h-4" />;
+    if (lowerStatus.includes('break') || lowerStatus.includes('fail')) return <XCircle className="w-4 h-4" />;
+    return <Clock className="w-4 h-4" />;
+  }
+
+  if (loadingProjects) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-lg">Loading...</div>
+      </div>
+    );
   }
 
   return (
@@ -321,32 +351,38 @@ export default function PrismUniverse() {
           <p className="text-sm text-gray-500 mt-1">{projects.length} active projects</p>
         </div>
         <div className="p-4 space-y-3 max-h-[calc(100vh-120px)] overflow-y-auto">
-          {projects.map((project) => (
-            <div
-              key={project.id}
-              className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                selectedProject.id === project.id
-                  ? "border-emerald-200 bg-emerald-50"
-                  : "border-gray-200 hover:border-gray-300"
-              }`}
-              onClick={() => {
-                setSelectedProject(project)
-                setSidebarOpen(false)
-                setSelectedEpic(null)
-                setSelectedStory(null)
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium text-gray-900 text-sm">{project.name}</h3>
-                <span className="text-xs text-gray-500">{project.passRate}%</span>
+          {projects.map((project) => {
+            // Calculate project stats
+            const projectEpics = epicsWithStories.filter(epic => 
+              epic.stories.some(story => story.key.startsWith(project.key))
+            );
+            const projectStories = projectEpics.flatMap(epic => epic.stories);
+            const projectTestCases = projectStories.flatMap(story => testCasesByStory[story.key] || []);
+            const passRate = projectTestCases.length > 0 ? 
+              Math.round((projectTestCases.filter(tc => tc.status.toLowerCase().includes('pass')).length / projectTestCases.length) * 100) : 0;
+
+            return (
+              <div
+                key={project.id}
+                className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                  selectedProject?.id === project.id
+                    ? "border-emerald-200 bg-emerald-50"
+                    : "border-gray-200 hover:border-gray-300"
+                }`}
+                onClick={() => handleProjectChange(project)}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium text-gray-900 text-sm">{project.name}</h3>
+                  <span className="text-xs text-gray-500">{passRate}%</span>
+                </div>
+                <Progress value={passRate} className="h-2 mb-2" />
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>{projectEpics.length} epics</span>
+                  <span>{projectStories.length} stories</span>
+                </div>
               </div>
-              <Progress value={project.passRate} className="h-2 mb-2" />
-              <div className="flex justify-between text-xs text-gray-500">
-                <span>{project.epics} epics</span>
-                <span>{project.stories} stories</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -363,10 +399,12 @@ export default function PrismUniverse() {
                   <div className="w-full h-0.5 bg-current"></div>
                 </div>
               </Button>
-              <h1 className="text-xl font-bold text-gray-900">{"DX Test Hub"} </h1>
-              <Badge variant="outline" className="border-emerald-200 text-slate-50 border bg-green-500">
-                {selectedProject.name}
-              </Badge>
+              <h1 className="text-xl font-bold text-gray-900">DX Test Hub</h1>
+              {selectedProject && (
+                <Badge variant="outline" className="border-emerald-200 text-slate-50 border bg-green-500">
+                  {selectedProject.name}
+                </Badge>
+              )}
             </div>
 
             <div className="flex items-center space-x-4">
@@ -375,48 +413,48 @@ export default function PrismUniverse() {
                 size="sm"
                 onClick={() => setSearchOpen(true)}
                 className="text-gray-600 font-medium"
-                aria-label="Open Search"
-                title="Open Search"
               >
                 <Search className="w-4 h-4 mr-2" />
                 <span className="hidden sm:inline">Search</span>
-                <kbd className="ml-2 px-0.5 py-0.5 bg-gray-100 rounded text-xs tracking-[0.2em] tracking-widest">⌘K </kbd>
+                <kbd className="ml-2 px-0.5 py-0.5 bg-gray-100 rounded text-xs tracking-[0.2em] tracking-widest">⌘K</kbd>
               </Button>
 
               <div className="text-sm text-gray-500">Last updated: {currentTime.toLocaleTimeString()}</div>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
-                      <AvatarFallback>
-                        {user.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end" forceMount>
-                  <div className="flex items-center justify-start gap-2 p-2">
-                    <div className="flex flex-col space-y-1 leading-none">
-                      <p className="font-medium">{user.name}</p>
-                      <p className="w-[200px] truncate text-sm text-muted-foreground">{user.email}</p>
+              {user && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={user.picture || "/placeholder.svg"} alt={user.name} />
+                        <AvatarFallback>
+                          {user.name
+                            .split(" ")
+                            .map((n: string) => n[0])
+                            .join("")}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <div className="flex items-center justify-start gap-2 p-2">
+                      <div className="flex flex-col space-y-1 leading-none">
+                        <p className="font-medium">{user.name}</p>
+                        <p className="w-[200px] truncate text-sm text-muted-foreground">{user.email}</p>
+                      </div>
                     </div>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem>
-                    <User className="mr-2 h-4 w-4" />
-                    <span>Profile</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleLogout}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem>
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Profile</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleLogout}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Log out</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           </div>
         </header>
@@ -425,26 +463,34 @@ export default function PrismUniverse() {
           {/* Canvas Area */}
           <div className="flex-1 p-6">
             <div className="bg-white rounded-lg border border-gray-200 h-full relative overflow-hidden">
-              {!selectedEpic ? (
-                // Epic View - replace the existing epic cubes section
+              {loadingData ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-lg">Loading project data...</div>
+                </div>
+              ) : !selectedProject ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-lg text-gray-500">Select a project to get started</div>
+                </div>
+              ) : !selectedEpic ? (
+                // Epic View
                 <div className="p-8">
                   <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">E-Commerce Platform</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{selectedProject.name}</h2>
                     <p className="text-gray-600">Click on an epic to explore its stories</p>
                   </div>
 
                   <div className="grid grid-cols-3 gap-6">
-                    {epics.map((epic) => {
-                      const aggregatedData = getEpicAggregatedData(epic.id)
+                    {epicsWithStories.map((epic) => {
+                      const aggregatedData = getEpicAggregatedData(epic.stories, testCasesByStory)
                       return (
                         <Card
-                          key={epic.id}
+                          key={epic.key}
                           className="cursor-pointer transition-all hover:shadow-lg hover:scale-105 group"
                           onClick={() => setSelectedEpic(epic)}
                         >
                           <CardContent className="p-4">
                             <h3 className="font-medium text-gray-900 text-sm mb-3 leading-tight min-h-[2.5rem]">
-                              {epic.name}
+                              {epic.summary}
                             </h3>
 
                             <div className="relative group/progress">
@@ -511,147 +557,169 @@ export default function PrismUniverse() {
                   </div>
                 </div>
               ) : !selectedStory ? (
-                // Story View - replace the existing story view section
+                // Story View
                 <div className="p-8">
                   <div className="mb-6">
                     <Button variant="ghost" size="sm" onClick={() => setSelectedEpic(null)} className="mb-4">
                       ← Back to Epics
                     </Button>
                     <div className="flex items-center justify-between mb-2">
-                      <h2 className="text-2xl font-bold text-black">{selectedEpic.name}</h2>
+                      <h2 className="text-2xl font-bold text-black">{selectedEpic.summary}</h2>
 
                       {/* Inline Pie Chart */}
                       <div className="flex items-center space-x-4">
-                        <div className="relative w-24 h-24">
-                          <PieChart width={96} height={96}>
-                            <Pie
-                              data={[
-                                { name: 'Passing', value: getEpicAggregatedData(selectedEpic.id).passing, color: '#10b981' },
-                                { name: 'Partial', value: getEpicAggregatedData(selectedEpic.id).partial, color: '#f59e0b' },
-                                { name: 'Breaking', value: getEpicAggregatedData(selectedEpic.id).breaking, color: '#ef4444' },
-                                { name: 'Pending', value: getEpicAggregatedData(selectedEpic.id).pending, color: '#9ca3af' }
-                              ].filter(item => item.value > 0)}
-                              cx={48}
-                              cy={48}
-                              innerRadius={25}
-                              outerRadius={40}
-                              paddingAngle={2}
-                              dataKey="value"
-                            >
-                              {[
-                                { name: 'Passing', value: getEpicAggregatedData(selectedEpic.id).passing, color: '#10b981' },
-                                { name: 'Partial', value: getEpicAggregatedData(selectedEpic.id).partial, color: '#f59e0b' },
-                                { name: 'Breaking', value: getEpicAggregatedData(selectedEpic.id).breaking, color: '#ef4444' },
-                                { name: 'Pending', value: getEpicAggregatedData(selectedEpic.id).pending, color: '#9ca3af' }
-                              ].filter(item => item.value > 0).map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip content={({ active, payload }: any) => {
-                              if (active && payload && payload.length) {
-                                const data = payload[0].payload
-                                return (
-                                  <div className="px-3 py-2 bg-white text-black text-sm rounded-lg shadow-lg whitespace-nowrap border border-gray-200">
-                                    {`${data.name}: ${data.value} test${data.value !== 1 ? 's' : ''}`}
-                                  </div>
-                                )
-                              }
-                              return null
-                            }} />
-                          </PieChart>
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          <div className={`font-semibold text-lg ${
-                            getEpicAggregatedData(selectedEpic.id).passRate <= 30 
-                              ? 'text-red-500' 
-                              : getEpicAggregatedData(selectedEpic.id).passRate <= 75 
-                                ? 'text-amber-500' 
-                                : 'text-emerald-500'
-                          }`}>
-                            {getEpicAggregatedData(selectedEpic.id).passRate}% Pass Rate
-                          </div>
-                          <div>{getEpicAggregatedData(selectedEpic.id).tests} total tests</div>
-                          <div>{getEpicAggregatedData(selectedEpic.id).passing} passing</div>
-                        </div>
+                        {(() => {
+                          const aggregatedData = getEpicAggregatedData(selectedEpic.stories, testCasesByStory);
+                          return (
+                            <>
+                              <div className="relative w-24 h-24">
+                                <PieChart width={96} height={96}>
+                                  <Pie
+                                    data={[
+                                      { name: 'Passing', value: aggregatedData.passing, color: '#10b981' },
+                                      { name: 'Partial', value: aggregatedData.partial, color: '#f59e0b' },
+                                      { name: 'Breaking', value: aggregatedData.breaking, color: '#ef4444' },
+                                      { name: 'Pending', value: aggregatedData.pending, color: '#9ca3af' }
+                                    ].filter(item => item.value > 0)}
+                                    cx={48}
+                                    cy={48}
+                                    innerRadius={25}
+                                    outerRadius={40}
+                                    paddingAngle={2}
+                                    dataKey="value"
+                                  >
+                                    {[
+                                      { name: 'Passing', value: aggregatedData.passing, color: '#10b981' },
+                                      { name: 'Partial', value: aggregatedData.partial, color: '#f59e0b' },
+                                      { name: 'Breaking', value: aggregatedData.breaking, color: '#ef4444' },
+                                      { name: 'Pending', value: aggregatedData.pending, color: '#9ca3af' }
+                                    ].filter(item => item.value > 0).map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                  </Pie>
+                                  <Tooltip content={({ active, payload }: any) => {
+                                    if (active && payload && payload.length) {
+                                      const data = payload[0].payload
+                                      return (
+                                        <div className="px-3 py-2 bg-white text-black text-sm rounded-lg shadow-lg whitespace-nowrap border border-gray-200">
+                                          {`${data.name}: ${data.value} test${data.value !== 1 ? 's' : ''}`}
+                                        </div>
+                                      )
+                                    }
+                                    return null
+                                  }} />
+                                </PieChart>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                <div className={`font-semibold text-lg ${
+                                  aggregatedData.passRate <= 30 
+                                    ? 'text-red-500' 
+                                    : aggregatedData.passRate <= 75 
+                                      ? 'text-amber-500' 
+                                      : 'text-emerald-500'
+                                }`}>
+                                  {aggregatedData.passRate}% Pass Rate
+                                </div>
+                                <div>{aggregatedData.tests} total tests</div>
+                                <div>{aggregatedData.passing} passing</div>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                     <p className="text-slate-500">Click on a story to view its details in the sidebar</p>
                   </div>
 
                   <div className="grid grid-cols-3 gap-6">
-                    {stories.map((story) => (
-                      <Card
-                        key={story.id}
-                        className={`cursor-pointer transition-all hover:shadow-lg hover:scale-105 group ${
-                          selectedStory?.id === story.id ? "ring-2 ring-emerald-500 bg-emerald-50" : ""
-                        }`}
-                        onClick={() => setSelectedStory(story)}
-                      >
-                        <CardContent className="p-4">
-                          <h3 className="font-medium text-gray-900 text-sm mb-3 leading-tight min-h-[2.5rem]">
-                            {story.name}
-                          </h3>
+                    {selectedEpic.stories.map((story) => {
+                      const storyTestCases = testCasesByStory[story.key] || [];
+                      const storyStats = storyTestCases.reduce(
+                        (acc, tc) => {
+                          const status = tc.status.toLowerCase();
+                          if (status.includes('pass')) acc.passing++;
+                          else if (status.includes('partial')) acc.partial++;
+                          else if (status.includes('break') || status.includes('fail')) acc.breaking++;
+                          else acc.pending++;
+                          return acc;
+                        },
+                        { passing: 0, partial: 0, breaking: 0, pending: 0 }
+                      );
 
-                          <div className="relative group/progress">
-                            <StackedProgressBar
-                              passing={story.passing}
-                              partial={story.partial}
-                              breaking={story.breaking}
-                              pending={story.pending}
-                              total={story.tests}
-                            />
+                      return (
+                        <Card
+                          key={story.key}
+                          className={`cursor-pointer transition-all hover:shadow-lg hover:scale-105 group ${
+                            selectedStory?.key === story.key ? "ring-2 ring-emerald-500 bg-emerald-50" : ""
+                          }`}
+                          onClick={() => setSelectedStory(story)}
+                        >
+                          <CardContent className="p-4">
+                            <h3 className="font-medium text-gray-900 text-sm mb-3 leading-tight min-h-[2.5rem]">
+                              {story.summary}
+                            </h3>
 
-                            <div className="absolute bottom-full left-0 mb-2 opacity-0 group-hover/progress:opacity-100 transition-opacity duration-200 z-10">
-                              <div className="bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg min-w-[200px]">
-                                <div className="space-y-1">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-2">
-                                      <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                                      <span>Passing</span>
+                            <div className="relative group/progress">
+                              <StackedProgressBar
+                                passing={storyStats.passing}
+                                partial={storyStats.partial}
+                                breaking={storyStats.breaking}
+                                pending={storyStats.pending}
+                                total={storyTestCases.length}
+                              />
+
+                              <div className="absolute bottom-full left-0 mb-2 opacity-0 group-hover/progress:opacity-100 transition-opacity duration-200 z-10">
+                                <div className="bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg min-w-[200px]">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center space-x-2">
+                                        <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                                        <span>Passing</span>
+                                      </div>
+                                      <span className="font-medium">{storyStats.passing}</span>
                                     </div>
-                                    <span className="font-medium">{story.passing}</span>
+                                    {storyStats.partial > 0 && (
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                          <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                                          <span>Partial</span>
+                                        </div>
+                                        <span className="font-medium">{storyStats.partial}</span>
+                                      </div>
+                                    )}
+                                    {storyStats.breaking > 0 && (
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                          <span>Breaking</span>
+                                        </div>
+                                        <span className="font-medium">{storyStats.breaking}</span>
+                                      </div>
+                                    )}
+                                    {storyStats.pending > 0 && (
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                          <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                                          <span>Pending</span>
+                                        </div>
+                                        <span className="font-medium">{storyStats.pending}</span>
+                                      </div>
+                                    )}
                                   </div>
-                                  {story.partial > 0 && (
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center space-x-2">
-                                        <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                                        <span>Partial</span>
-                                      </div>
-                                      <span className="font-medium">{story.partial}</span>
+                                  <div className="border-t border-gray-700 mt-2 pt-2">
+                                    <div className="flex items-center justify-between font-medium">
+                                      <span>Total</span>
+                                      <span>{storyTestCases.length}</span>
                                     </div>
-                                  )}
-                                  {story.breaking > 0 && (
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center space-x-2">
-                                        <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                                        <span>Breaking</span>
-                                      </div>
-                                      <span className="font-medium">{story.breaking}</span>
-                                    </div>
-                                  )}
-                                  {story.pending > 0 && (
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center space-x-2">
-                                        <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                                        <span>Pending</span>
-                                      </div>
-                                      <span className="font-medium">{story.pending}</span>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="border-t border-gray-700 mt-2 pt-2">
-                                  <div className="flex items-center justify-between font-medium">
-                                    <span>Total</span>
-                                    <span>{story.tests}</span>
                                   </div>
+                                  <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                                 </div>
-                                <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
                               </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -680,74 +748,88 @@ export default function PrismUniverse() {
                 <div>
                   <div className="mb-6">
                     <div className="flex text-sm text-gray-500 mb-4 items-center">
-                      
-                      
-                      
-                      
-                      <span className="text-black font-medium text-lg">{selectedStory.name}</span>
+                      <span className="text-black font-medium text-lg">{selectedStory.summary}</span>
                     </div>
 
                     {/* Story Status Distribution Pie Chart */}
-                    <div className="flex items-center justify-center mb-6">
-                      <StatusDistributionPieChart
-                        passing={selectedStory.passing}
-                        partial={selectedStory.partial}
-                        breaking={selectedStory.breaking}
-                        pending={selectedStory.pending}
-                        total={selectedStory.tests}
-                        size={128}
-                      />
-                    </div>
-                  </div>
+                    {(() => {
+                      const storyTestCases = testCasesByStory[selectedStory.key] || [];
+                      const storyStats = storyTestCases.reduce(
+                        (acc, tc) => {
+                          const status = tc.status.toLowerCase();
+                          if (status.includes('pass')) acc.passing++;
+                          else if (status.includes('partial')) acc.partial++;
+                          else if (status.includes('break') || status.includes('fail')) acc.breaking++;
+                          else acc.pending++;
+                          return acc;
+                        },
+                        { passing: 0, partial: 0, breaking: 0, pending: 0 }
+                      );
 
-                  {/* Summary Section */}
-                  <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">Test Summary</h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Total Tests</span>
-                        <span className="font-medium">{selectedStory.tests}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Pass Rate</span>
-                        <span className="font-medium text-emerald-600">{selectedStory.passRate}%</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Last Run</span>
-                        <span className="font-medium">2 min ago</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Duration</span>
-                        <span className="font-medium">1.2s avg</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Test History Line Chart */}
-                  
-
-                  {/* Test Cases Table */}
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">Test Cases</h3>
-                    <div className="max-h-64 overflow-y-auto space-y-1">
-                      {tests
-                        .sort((a, b) => {
-                          const statusOrder = { breaking: 0, partial: 1, pending: 2, passing: 3 }
-                          return statusOrder[a.status] - statusOrder[b.status]
-                        })
-                        .map((test) => (
-                          <div
-                            key={test.id}
-                            className={`p-3 rounded-lg text-sm ${getStatusColor(test.status)} flex items-center justify-between`}
-                          >
-                            <div className="flex items-center space-x-2">
-                              {getStatusIcon(test.status)}
-                              <span className="font-medium text-xs">{test.name}</span>
-                            </div>
-                            <span className="text-xs text-gray-600">{test.duration}</span>
+                      return (
+                        <>
+                          <div className="flex items-center justify-center mb-6">
+                            <StatusDistributionPieChart
+                              passing={storyStats.passing}
+                              partial={storyStats.partial}
+                              breaking={storyStats.breaking}
+                              pending={storyStats.pending}
+                              total={storyTestCases.length}
+                              size={128}
+                            />
                           </div>
-                        ))}
-                    </div>
+
+                          {/* Summary Section */}
+                          <div className="mb-6">
+                            <h3 className="text-sm font-medium text-gray-900 mb-3">Test Summary</h3>
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-600">Total Tests</span>
+                                <span className="font-medium">{storyTestCases.length}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-600">Pass Rate</span>
+                                <span className="font-medium text-emerald-600">
+                                  {storyTestCases.length > 0 ? Math.round((storyStats.passing / storyTestCases.length) * 100) : 0}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Test Cases Table */}
+                          <div>
+                            <h3 className="text-sm font-medium text-gray-900 mb-3">Test Cases</h3>
+                            <div className="max-h-64 overflow-y-auto space-y-1">
+                              {storyTestCases
+                                .sort((a, b) => {
+                                  const statusOrder: Record<string, number> = { 
+                                    breaking: 0, partial: 1, pending: 2, passing: 3 
+                                  };
+                                  const aStatus = a.status.toLowerCase().includes('break') ? 'breaking' :
+                                                 a.status.toLowerCase().includes('partial') ? 'partial' :
+                                                 a.status.toLowerCase().includes('pass') ? 'passing' : 'pending';
+                                  const bStatus = b.status.toLowerCase().includes('break') ? 'breaking' :
+                                                 b.status.toLowerCase().includes('partial') ? 'partial' :
+                                                 b.status.toLowerCase().includes('pass') ? 'passing' : 'pending';
+                                  return statusOrder[aStatus] - statusOrder[bStatus];
+                                })
+                                .map((testCase) => (
+                                  <div
+                                    key={testCase.key}
+                                    className={`p-3 rounded-lg text-sm ${getStatusColor(testCase.status)} flex items-center justify-between`}
+                                  >
+                                    <div className="flex items-center space-x-2">
+                                      {getStatusIcon(testCase.status)}
+                                      <span className="font-medium text-xs">{testCase.summary}</span>
+                                    </div>
+                                    <span className="text-xs text-gray-600">{testCase.key}</span>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
@@ -791,7 +873,7 @@ export default function PrismUniverse() {
               </div>
               <div>
                 <label className="text-sm font-medium">Target Epic</label>
-                <Input defaultValue={selectedEpic?.name || "Select an epic first"} className="mt-1" />
+                <Input defaultValue={selectedEpic?.summary || "Select an epic first"} className="mt-1" />
               </div>
               <Button className="w-full bg-emerald-600 hover:bg-emerald-700">Generate User Stories</Button>
             </TabsContent>
