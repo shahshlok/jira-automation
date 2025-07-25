@@ -1,24 +1,28 @@
 import { PieChart } from 'react-minimal-pie-chart';
 import { StatusPill } from './StatusPill';
-import type { TestCase } from '../../api/mockData';
+import type { TestCase } from '../../api/fetchHelpers';
 
 interface PieStatusChartProps {
   testCases: TestCase[];
 }
 
-const statusColors = {
-  'Pending': '#d1d5db', // gray-300
-  'Breaking': '#ef4444', // red-500
-  'Partial Passing': '#f59e0b', // amber-500
-  'Passing': '#10b981', // green-500
-} as const;
+const getStatusColor = (status: string) => {
+  const lowerStatus = status.toLowerCase();
+  
+  if (lowerStatus.includes('pass')) return '#10b981'; // green-500
+  if (lowerStatus.includes('partial')) return '#f59e0b'; // amber-500
+  if (lowerStatus.includes('break') || lowerStatus.includes('fail')) return '#ef4444'; // red-500
+  if (lowerStatus.includes('backlog')) return '#94a3b8'; // slate-400
+  
+  return '#d1d5db'; // gray-300 for pending/unknown
+};
 
 export function PieStatusChart({ testCases }: PieStatusChartProps) {
   // Calculate status counts
   const statusCounts = testCases.reduce((acc, testCase) => {
     acc[testCase.status] = (acc[testCase.status] || 0) + 1;
     return acc;
-  }, {} as Record<TestCase['status'], number>);
+  }, {} as Record<string, number>);
 
   const total = testCases.length;
   
@@ -26,7 +30,7 @@ export function PieStatusChart({ testCases }: PieStatusChartProps) {
   const pieData = Object.entries(statusCounts).map(([status, count]) => ({
     title: status,
     value: count,
-    color: statusColors[status as TestCase['status']],
+    color: getStatusColor(status),
   }));
 
   if (total === 0) {
@@ -75,7 +79,7 @@ export function PieStatusChart({ testCases }: PieStatusChartProps) {
             return (
               <div key={status} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <StatusPill status={status as TestCase['status']} />
+                  <StatusPill status={status} />
                 </div>
                 <div className="text-sm text-muted-foreground">
                   {count} ({percentage}%)

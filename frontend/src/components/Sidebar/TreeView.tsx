@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, File, Bug } from 'lucide-react';
+import { ChevronRight, ChevronDown, Zap, Ban, ListChecks } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { Story } from '../../api/mockData';
@@ -152,7 +152,7 @@ export function TreeView({ projectKey, epicsWithStories, selectedStoryKey, onSto
   if (!projectKey) {
     return (
       <div className="p-4 text-center text-muted-foreground">
-        <Folder className="h-8 w-8 mx-auto mb-2 opacity-50" />
+        <Zap className="h-8 w-8 mx-auto mb-2 opacity-50" />
         <p>Select a project to view epics and stories</p>
       </div>
     );
@@ -172,7 +172,7 @@ export function TreeView({ projectKey, epicsWithStories, selectedStoryKey, onSto
           <TreeNode
             key={epic.key}
             label={epic.summary}
-            icon={<Folder className="h-4 w-4 text-blue-500" />}
+            icon={<Zap className="h-4 w-4 text-blue-500" />}
             level={0}
             isExpanded={isEpicExpanded}
             onToggle={() => toggleEpic(epic.key)}
@@ -181,7 +181,7 @@ export function TreeView({ projectKey, epicsWithStories, selectedStoryKey, onSto
               <TreeNode
                 key={story.key}
                 label={`${story.key}: ${story.summary}`}
-                icon={<Bug className="h-4 w-4 text-green-600" />}
+                icon={<ListChecks className="h-4 w-4 text-green-600" />}
                 level={1}
                 isSelected={selectedStoryKey === story.key}
                 onClick={() => onStorySelect(story.key, story)}
@@ -198,7 +198,7 @@ export function TreeView({ projectKey, epicsWithStories, selectedStoryKey, onSto
       
       {filteredEpics.length === 0 && (
         <div className="p-4 text-center text-muted-foreground">
-          <File className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <Ban className="h-8 w-8 mx-auto mb-2 opacity-50" />
           <p>No epics found</p>
         </div>
       )}

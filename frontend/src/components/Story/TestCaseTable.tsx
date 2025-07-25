@@ -1,7 +1,6 @@
-import { formatDistanceToNow } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusPill } from './StatusPill';
-import type { TestCase } from '../../api/mockData';
+import type { TestCase } from '../../api/fetchHelpers';
 
 interface TestCaseTableProps {
   testCases: TestCase[];
@@ -32,26 +31,22 @@ export function TestCaseTable({ testCases }: TestCaseTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[50px]">ID</TableHead>
-              <TableHead>Description</TableHead>
+              <TableHead className="w-[120px]">Key</TableHead>
+              <TableHead>Summary</TableHead>
               <TableHead className="w-[120px]">Status</TableHead>
-              <TableHead className="w-[120px]">Last Updated</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {testCases.map((testCase) => (
-              <TableRow key={testCase.id} className="hover:bg-accent/50">
+              <TableRow key={testCase.key} className="hover:bg-accent/50">
                 <TableCell className="font-mono text-sm text-muted-foreground">
-                  {testCase.id}
+                  {testCase.key}
                 </TableCell>
-                <TableCell className="max-w-0 truncate" title={testCase.description}>
-                  {testCase.description}
+                <TableCell className="max-w-0 truncate" title={testCase.summary}>
+                  {testCase.summary}
                 </TableCell>
                 <TableCell>
                   <StatusPill status={testCase.status} />
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {formatDistanceToNow(new Date(testCase.lastUpdated), { addSuffix: true })}
                 </TableCell>
               </TableRow>
             ))}
