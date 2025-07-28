@@ -3,9 +3,27 @@ export interface Project {
   id: string;
   name: string;
   key: string;
-  avatarUrls?: any;
-  projectTypeKey: string;
+  avatarUrls?: {
+    '16x16'?: string;
+    '24x24'?: string;
+    '32x32'?: string;
+    '48x48'?: string;
+  };
+  projectTypeKey?: string;
   description?: string;
+  insight?: {
+    lastIssueUpdateTime: string;
+    totalIssueCount: number;
+  };
+  projectCategory?: {
+    id: string;
+    name: string;
+    description: string;
+    self: string;
+  };
+  self?: string;
+  simplified?: boolean;
+  style?: string;
 }
 
 export interface Epic {
@@ -51,10 +69,15 @@ export async function fetchProjects(): Promise<Project[]> {
     return data.projects.map((project: any) => ({
       key: project.key,
       name: project.name,
-      avatarUrl: project.avatarUrls?.['16x16'] || project.avatarUrls?.['24x24'] || '',
+      avatarUrls: project.avatarUrls,
       id: project.id,
       projectTypeKey: project.projectTypeKey,
-      description: project.description || ''
+      description: project.description,
+      insight: project.insight,
+      projectCategory: project.projectCategory,
+      self: project.self,
+      simplified: project.simplified,
+      style: project.style
     }));
   } catch (error) {
     console.error('Failed to fetch projects:', error);
