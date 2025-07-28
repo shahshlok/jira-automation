@@ -19,7 +19,7 @@ import { HeaderBar } from "@/components/dashboard/layout/HeaderBar";
 import { StoryDetailsSidebar } from "@/components/dashboard/layout/StoryDetailsSidebar";
 import { EpicGridView } from "@/components/dashboard/views/EpicGridView";
 import { StoryGridView } from "@/components/dashboard/views/StoryGridView";
-import { AIGenerationDialog } from "@/components/dashboard/AIGenerationDialog";
+import { ChatPopup } from "@/components/ChatPopup";
 
 
 export default function Dashboard() {
@@ -40,8 +40,7 @@ export default function Dashboard() {
         null,
     );
     const [selectedStory, setSelectedStory] = useState<Story | null>(null);
-    const [sidebarOpen] = useState(true);
-    const [wizardOpen, setWizardOpen] = useState(false);
+    const [chatOpen, setChatOpen] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
 
     // Loading states
@@ -263,11 +262,10 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {/* Crystal FAB */}
-            <AIGenerationDialog
-                open={wizardOpen}
-                onOpenChange={setWizardOpen}
-                selectedEpic={selectedEpic}
+            {/* Chat Popup */}
+            <ChatPopup
+                open={chatOpen}
+                onOpenChange={setChatOpen}
             />
 
         </div>
