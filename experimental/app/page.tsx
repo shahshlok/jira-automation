@@ -211,6 +211,11 @@ export default function Dashboard() {
                     selectedProject={selectedProject}
                     user={user}
                     currentTime={currentTime}
+                    projects={projects}
+                    epicsWithStories={epicsWithStories}
+                    onProjectSelect={handleProjectChange}
+                    onEpicSelect={setSelectedEpic}
+                    onStorySelect={setSelectedStory}
                     onLogout={handleLogout}
                 />
 

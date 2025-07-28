@@ -9,13 +9,19 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Project } from "@/lib/apiHelpers";
+import { Project, Story } from "@/lib/apiHelpers";
+import { EpicWithStories } from "@/lib/dashboard/types";
 import { InlineSearch } from "../InlineSearch";
 
 interface HeaderBarProps {
     selectedProject: Project | null;
     user: any;
     currentTime: Date;
+    projects: Project[];
+    epicsWithStories: EpicWithStories[];
+    onProjectSelect: (project: Project) => void;
+    onEpicSelect: (epic: EpicWithStories) => void;
+    onStorySelect: (story: Story) => void;
     onLogout: () => void;
 }
 
@@ -23,6 +29,11 @@ export const HeaderBar = ({
     selectedProject,
     user,
     currentTime,
+    projects,
+    epicsWithStories,
+    onProjectSelect,
+    onEpicSelect,
+    onStorySelect,
     onLogout,
 }: HeaderBarProps) => {
     return (
@@ -39,7 +50,13 @@ export const HeaderBar = ({
                         Last updated: {currentTime.toLocaleTimeString()}
                     </div>
 
-                    <InlineSearch />
+                    <InlineSearch 
+                        projects={projects}
+                        epicsWithStories={epicsWithStories}
+                        onProjectSelect={onProjectSelect}
+                        onEpicSelect={onEpicSelect}
+                        onStorySelect={onStorySelect}
+                    />
 
                     {user && (
                         <DropdownMenu>

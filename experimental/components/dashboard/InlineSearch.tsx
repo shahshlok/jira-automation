@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { fetchBulkData, BulkData } from "@/lib/apiHelpers";
+import { fetchBulkData, BulkData, Project, Story } from "@/lib/apiHelpers";
+import { EpicWithStories } from "@/lib/dashboard/types";
 
 interface SearchResult {
     type: 'project' | 'epic' | 'story' | 'task' | 'testcase';
@@ -16,9 +17,21 @@ interface SearchResult {
 
 interface InlineSearchProps {
     className?: string;
+    projects: Project[];
+    epicsWithStories: EpicWithStories[];
+    onProjectSelect: (project: Project) => void;
+    onEpicSelect: (epic: EpicWithStories) => void;
+    onStorySelect: (story: Story) => void;
 }
 
-export const InlineSearch = ({ className = "" }: InlineSearchProps) => {
+export const InlineSearch = ({ 
+    className = "", 
+    projects, 
+    epicsWithStories, 
+    onProjectSelect, 
+    onEpicSelect, 
+    onStorySelect 
+}: InlineSearchProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [query, setQuery] = useState("");
     const [bulkData, setBulkData] = useState<BulkData | null>(null);
@@ -178,6 +191,45 @@ export const InlineSearch = ({ className = "" }: InlineSearchProps) => {
         inputRef.current?.focus();
     };
 
+    const handleResultClick = (result: SearchResult) => {
+        // Close search
+        setIsExpanded(false);
+        setQuery("");
+
+        switch (result.type) {
+            case 'project':
+                const project = projects.find(p => p.key === result.key);
+                if (project) onProjectSelect(project);
+                break;
+                
+            case 'epic':
+                const epic = epicsWithStories.find(e => e.key === result.key);
+                if (epic) onEpicSelect(epic);
+                break;
+                
+            case 'story':
+                // Find the story in the epicsWithStories data
+                const story = epicsWithStories
+                    .flatMap(epic => epic.stories)
+                    .find(s => s.key === result.key);
+                if (story) onStorySelect(story);
+                break;
+                
+            case 'testcase':
+                // For test cases, find the parent story and select it
+                // This will open the story details sidebar showing the test case
+                const parentStory = epicsWithStories
+                    .flatMap(epic => epic.stories)
+                    .find(s => s.key === result.parentKey);
+                if (parentStory) onStorySelect(parentStory);
+                break;
+                
+            case 'task':
+                // Tasks don't have specific navigation in this UI
+                break;
+        }
+    };
+
     return (
         <div ref={searchRef} className={`relative ${className}`}>
             {/* Search Button/Input Container */}
@@ -249,6 +301,7 @@ export const InlineSearch = ({ className = "" }: InlineSearchProps) => {
                                     className={`flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer ${
                                         index !== searchResults.length - 1 ? 'border-b border-gray-100' : ''
                                     }`}
+                                    onClick={() => handleResultClick(result)}
                                 >
                                     <Badge 
                                         variant="outline" 
