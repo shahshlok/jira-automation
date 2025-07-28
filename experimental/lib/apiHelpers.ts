@@ -193,3 +193,64 @@ export async function logout(): Promise<void> {
     console.error('Logout error:', error);
   }
 }
+
+// Bulk data types for global search
+export interface BulkData {
+  projects: Project[];
+  epics: Epic & { projectKey: string; projectName: string }[];
+  stories: Story & { projectKey: string; projectName: string; status: string }[];
+  tasks: {
+    key: string;
+    summary: string;
+    issueType: string;
+    assignee?: {
+      displayName: string;
+      avatarUrl: string;
+    };
+    priority: {
+      name: string;
+      iconUrl: string;
+    };
+    updated: string;
+    projectKey: string;
+    projectName: string;
+    status: string;
+  }[];
+  testCases: {
+    key: string;
+    summary: string;
+    status: string;
+    parentKey?: string;
+    parentSummary?: string;
+    projectKey: string;
+    projectName: string;
+  }[];
+  metadata: {
+    totalProjects: number;
+    totalIssues: number;
+    pagination: {
+      startAt: number;
+      maxResults: number;
+      total: number;
+      isLast: boolean;
+    };
+  };
+}
+
+export async function fetchBulkData(): Promise<BulkData> {
+  try {
+    const response = await fetch('/api/bulk-data', {
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    return result.data;
+  } catch (error) {
+    console.error('Failed to fetch bulk data:', error);
+    throw error;
+  }
+}

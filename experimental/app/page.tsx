@@ -20,7 +20,6 @@ import { StoryDetailsSidebar } from "@/components/dashboard/layout/StoryDetailsS
 import { EpicGridView } from "@/components/dashboard/views/EpicGridView";
 import { StoryGridView } from "@/components/dashboard/views/StoryGridView";
 import { AIGenerationDialog } from "@/components/dashboard/AIGenerationDialog";
-import { GlobalSearchDialog } from "@/components/dashboard/GlobalSearchDialog";
 
 
 export default function Dashboard() {
@@ -42,7 +41,6 @@ export default function Dashboard() {
     );
     const [selectedStory, setSelectedStory] = useState<Story | null>(null);
     const [sidebarOpen] = useState(true);
-    const [searchOpen, setSearchOpen] = useState(false);
     const [wizardOpen, setWizardOpen] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -213,7 +211,6 @@ export default function Dashboard() {
                     selectedProject={selectedProject}
                     user={user}
                     currentTime={currentTime}
-                    onSearchOpen={() => setSearchOpen(true)}
                     onLogout={handleLogout}
                 />
 
@@ -268,11 +265,6 @@ export default function Dashboard() {
                 selectedEpic={selectedEpic}
             />
 
-            {/* Global Search */}
-            <GlobalSearchDialog
-                open={searchOpen}
-                onOpenChange={setSearchOpen}
-            />
         </div>
     );
 }

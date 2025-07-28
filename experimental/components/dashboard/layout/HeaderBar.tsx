@@ -1,4 +1,4 @@
-import { Search, LogOut, User } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,12 +10,12 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Project } from "@/lib/apiHelpers";
+import { InlineSearch } from "../InlineSearch";
 
 interface HeaderBarProps {
     selectedProject: Project | null;
     user: any;
     currentTime: Date;
-    onSearchOpen: () => void;
     onLogout: () => void;
 }
 
@@ -23,7 +23,6 @@ export const HeaderBar = ({
     selectedProject,
     user,
     currentTime,
-    onSearchOpen,
     onLogout,
 }: HeaderBarProps) => {
     return (
@@ -33,33 +32,14 @@ export const HeaderBar = ({
                     <h1 className="text-xl font-bold text-gray-900">
                         DX Test Hub
                     </h1>
-                    {selectedProject && (
-                        <Badge
-                            variant="outline"
-                            className="border-emerald-200 text-slate-50 border bg-green-500"
-                        >
-                            {selectedProject.name}
-                        </Badge>
-                    )}
                 </div>
 
                 <div className="flex items-center space-x-4">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={onSearchOpen}
-                        className="text-gray-600 font-medium"
-                    >
-                        <Search className="w-4 h-4 mr-2" />
-                        <span className="hidden sm:inline">Search</span>
-                        <kbd className="ml-2 px-0.5 py-0.5 bg-gray-100 rounded text-xs tracking-[0.2em] tracking-widest">
-                            ⌘K
-                        </kbd>
-                    </Button>
-
                     <div className="text-sm text-gray-500">
                         Last updated: {currentTime.toLocaleTimeString()}
                     </div>
+
+                    <InlineSearch />
 
                     {user && (
                         <DropdownMenu>
