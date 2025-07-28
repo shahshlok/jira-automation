@@ -32,7 +32,7 @@ export function middleware(request: NextRequest) {
   
   // If already authenticated and trying to access login, redirect to dashboard
   if (authCookie && cloudIdCookie && pathname === '/login') {
-    const dashboardUrl = new URL('/', request.url);
+    const dashboardUrl = new URL('/dashboard', request.url);
     return NextResponse.redirect(dashboardUrl);
   }
   

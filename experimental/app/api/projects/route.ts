@@ -19,24 +19,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No cloudId found' }, { status: 401 });
     }
     
-    // Fetch projects using the cached cloudId
-    safeLog({}, 'Fetching projects from Jira API v3...');
-    const projectsResponse = await axios.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/project`, {
+    // Fetch projects using the cached cloudId with v3 project/search endpoint
+    safeLog({}, 'Fetching projects from Jira API v3 project/search...');
+    const projectsResponse = await axios.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/project/search`, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
       }
     });
     
-    safeLog({}, 'Fetched projects from Jira API v3');
+    safeLog({}, 'Fetched projects from Jira API v3 project/search');
     
-    // Return the projects with metadata
+    // Return the projects with metadata (v3 project/search returns paginated response)
     return NextResponse.json({
       success: true,
       cloudId: cloudId,
       siteName: siteName,
-      totalProjects: projectsResponse.data.length,
-      projects: projectsResponse.data
+      totalProjects: projectsResponse.data.total || projectsResponse.data.values?.length || 0,
+      projects: projectsResponse.data.values || projectsResponse.data
     });
 
   } catch (error: any) {

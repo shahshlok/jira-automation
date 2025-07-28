@@ -15,7 +15,7 @@ export default function Login() {
       try {
         await checkAuth();
         // User is already authenticated, redirect to dashboard
-        router.push('/');
+        router.push('/dashboard');
         return;
       } catch (error) {
         // User is not authenticated, show login form
