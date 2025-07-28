@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Send } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 
@@ -164,18 +165,6 @@ export default function ChatWidget() {
 
           {/* Input Field Row */}
           <div className="flex items-center space-x-3">
-            {/* Plus Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="flex-shrink-0 w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600"
-              disabled={isLoading}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </Button>
-
             {/* Input Field */}
             <div className="flex-1 relative">
               <Input
@@ -193,11 +182,9 @@ export default function ChatWidget() {
               onClick={() => handleSend()}
               disabled={isLoading || !inputValue.trim()}
               size="icon"
-              className="flex-shrink-0 w-9 h-9 rounded-full bg-gray-900 hover:bg-gray-800 text-white disabled:bg-gray-300"
+              className="flex-shrink-0 w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-gray-300 transition-all duration-200 hover:scale-105 active:scale-95 transform"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
+              <Send className="w-4 h-4" />
             </Button>
           </div>
         </div>
