@@ -1,22 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { safeLog } from '@/lib/backend/jiraHelpers';
 
 interface ChatRequest {
   message: string;
-}
-
-function safeServerLog(label: string, data: unknown) {
-  if (process.env.NODE_ENV !== 'development') return;
-  // Never log sensitive data like API keys or tokens
-  if (typeof data === 'object' && data !== null) {
-    const sanitized = { ...data };
-    // Remove any potential sensitive fields
-    delete (sanitized as any).authorization;
-    delete (sanitized as any).apiKey;
-    delete (sanitized as any).token;
-    console.log(label, sanitized);
-  } else {
-    console.log(label, data);
-  }
 }
 
 export async function POST(request: NextRequest) {
@@ -35,7 +21,7 @@ export async function POST(request: NextRequest) {
     
     if (!apiKey) {
       // Fallback to stub response if no API key is configured
-      safeServerLog('No OpenAI API key configured, using stub response', {});
+      safeLog({}, 'No OpenAI API key configured, using stub response', 'warn');
       
       await new Promise(resolve => setTimeout(resolve, 600));
       
@@ -47,7 +33,7 @@ export async function POST(request: NextRequest) {
     // General purpose system prompt for unified chat
     const systemPrompt = 'You are a helpful assistant that can help with various software development tasks including generating test cases, user stories, code reviews, and answering technical questions. Provide clear, practical, and actionable responses.';
 
-    safeServerLog('Making OpenAI API request', { messageLength: message.length });
+    safeLog({ messageLength: message.length }, 'Making OpenAI API request', 'debug');
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -73,7 +59,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      safeServerLog('OpenAI API error', { status: response.status, statusText: response.statusText });
+      safeLog({ status: response.status, statusText: response.statusText }, 'OpenAI API error', 'error');
       
       return NextResponse.json(
         { error: `OpenAI API error: ${response.status} ${response.statusText}` },
@@ -84,7 +70,7 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
     
     if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      safeServerLog('Unexpected OpenAI response format', { hasChoices: !!data.choices });
+      safeLog({ hasChoices: !!data.choices }, 'Unexpected OpenAI response format', 'error');
       
       return NextResponse.json(
         { error: 'Unexpected response format from OpenAI' },
@@ -93,14 +79,14 @@ export async function POST(request: NextRequest) {
     }
 
     const content = data.choices[0].message.content;
-    safeServerLog('OpenAI response received', { contentLength: content?.length });
+    safeLog({ contentLength: content?.length }, 'OpenAI response received', 'debug');
 
     return NextResponse.json({
       content: content
     });
 
   } catch (error) {
-    safeServerLog('Chat API error', error);
+    safeLog(error, 'Chat API error', 'error');
     
     return NextResponse.json(
       { error: 'Internal server error' },
