@@ -14,10 +14,12 @@ export default function Login() {
     const checkAuthentication = async () => {
       try {
         await checkAuth();
+        // User is already authenticated, redirect to dashboard
         router.push('/');
         return;
       } catch (error) {
-        console.error('Authentication check error:', error);
+        // User is not authenticated, show login form
+        console.log('User not authenticated, showing login form');
       } finally {
         setIsChecking(false);
       }

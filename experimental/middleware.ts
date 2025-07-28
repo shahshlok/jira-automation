@@ -9,22 +9,31 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/') ||
     pathname.startsWith('/_next/') ||
-    pathname.includes('.')
+    pathname.includes('.') ||
+    pathname === '/favicon.ico'
   ) {
     return NextResponse.next();
   }
   
   // Check if user has auth cookie
   const authCookie = request.cookies.get('jira_auth');
+  const cloudIdCookie = request.cookies.get('cloudId');
   
-  if (!authCookie && pathname !== '/login') {
-    // Redirect to login if not authenticated
-    return NextResponse.redirect(new URL('/login', request.url));
+  // For debugging - log auth attempts (remove in production)
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[Auth Middleware] ${pathname} - Auth: ${authCookie ? 'YES' : 'NO'}`);
   }
   
-  if (authCookie && pathname === '/login') {
-    // Redirect to dashboard if already authenticated
-    return NextResponse.redirect(new URL('/', request.url));
+  // If no auth cookie or cloudId, redirect to login
+  if ((!authCookie || !cloudIdCookie) && pathname !== '/login') {
+    const loginUrl = new URL('/login', request.url);
+    return NextResponse.redirect(loginUrl);
+  }
+  
+  // If already authenticated and trying to access login, redirect to dashboard
+  if (authCookie && cloudIdCookie && pathname === '/login') {
+    const dashboardUrl = new URL('/', request.url);
+    return NextResponse.redirect(dashboardUrl);
   }
   
   return NextResponse.next();

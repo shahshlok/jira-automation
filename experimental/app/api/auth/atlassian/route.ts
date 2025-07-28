@@ -12,7 +12,11 @@ export async function GET(request: NextRequest) {
     maxAge: 10 * 60 // 10 minutes
   });
   
-  const authUrl = `https://auth.atlassian.com/authorize?audience=api.atlassian.com&client_id=${process.env.CLIENT_ID}&scope=read%3Ajira-work%20read%3Ajira-user%20manage%3Ajira-configuration&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fcallback&state=${state}&response_type=code&prompt=consent`;
+  // Get the redirect URI from environment or construct it dynamically
+  const redirectUri = process.env.REDIRECT_URI || `${request.nextUrl.origin}/api/auth/callback`;
+  const encodedRedirectUri = encodeURIComponent(redirectUri);
+  
+  const authUrl = `https://auth.atlassian.com/authorize?audience=api.atlassian.com&client_id=${process.env.CLIENT_ID}&scope=read%3Ajira-work%20read%3Ajira-user%20manage%3Ajira-configuration&redirect_uri=${encodedRedirectUri}&state=${state}&response_type=code&prompt=consent`;
 
   return NextResponse.redirect(authUrl);
 }
