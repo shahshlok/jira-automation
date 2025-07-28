@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeLog } from '@/lib/backend/jiraHelpers';
+import { generateChat } from '@/src/openaiService';
 
 interface ChatRequest {
   message: string;
@@ -31,54 +32,25 @@ export async function POST(request: NextRequest) {
     }
 
     // General purpose system prompt for unified chat
-    const systemPrompt = 'You are a helpful assistant that can help with various software development tasks including generating test cases, user stories, code reviews, and answering technical questions. Provide clear, practical, and actionable responses.';
+    const jsonMode = process.env.OPENAI_JSON_MODE === 'true';
+    const systemPrompt = jsonMode 
+      ? 'You are a helpful assistant that can help with various software development tasks including generating test cases, user stories, code reviews, and answering technical questions. You must respond with valid JSON format.'
+      : 'You are a helpful assistant that can help with various software development tasks including generating test cases, user stories, code reviews, and answering technical questions. Provide clear, practical, and actionable responses.';
 
     safeLog({ messageLength: message.length }, 'Making OpenAI API request', 'debug');
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+    // Use the new generateChat function from openaiService
+    const content = await generateChat([
+      {
+        role: 'system',
+        content: systemPrompt
       },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: systemPrompt
-          },
-          {
-            role: 'user',
-            content: message
-          }
-        ],
-        max_tokens: 500,
-        temperature: 0.7,
-      }),
-    });
+      {
+        role: 'user',
+        content: message
+      }
+    ]);
 
-    if (!response.ok) {
-      safeLog({ status: response.status, statusText: response.statusText }, 'OpenAI API error', 'error');
-      
-      return NextResponse.json(
-        { error: `OpenAI API error: ${response.status} ${response.statusText}` },
-        { status: response.status }
-      );
-    }
-
-    const data = await response.json();
-    
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      safeLog({ hasChoices: !!data.choices }, 'Unexpected OpenAI response format', 'error');
-      
-      return NextResponse.json(
-        { error: 'Unexpected response format from OpenAI' },
-        { status: 500 }
-      );
-    }
-
-    const content = data.choices[0].message.content;
     safeLog({ contentLength: content?.length }, 'OpenAI response received', 'debug');
 
     return NextResponse.json({
