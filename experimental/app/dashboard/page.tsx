@@ -266,6 +266,8 @@ export default function Dashboard() {
             <ChatPopup
                 open={chatOpen}
                 onOpenChange={setChatOpen}
+                selectedStory={selectedStory}
+                selectedEpic={selectedEpic}
             />
 
         </div>

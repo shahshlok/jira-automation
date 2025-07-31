@@ -4,13 +4,17 @@ import { useEffect, useState } from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ChatWidget from './ChatWidget';
+import { Story } from '@/lib/apiHelpers';
+import { EpicWithStories } from '@/lib/dashboard/types';
 
 interface ChatPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  selectedStory?: Story | null;
+  selectedEpic?: EpicWithStories | null;
 }
 
-export const ChatPopup = ({ open, onOpenChange }: ChatPopupProps) => {
+export const ChatPopup = ({ open, onOpenChange, selectedStory, selectedEpic }: ChatPopupProps) => {
   const [isSpinning, setIsSpinning] = useState(false);
 
   useEffect(() => {
@@ -77,7 +81,7 @@ export const ChatPopup = ({ open, onOpenChange }: ChatPopupProps) => {
 
             {/* Chat Widget */}
             <div className="flex-1 overflow-hidden">
-              <ChatWidget />
+              <ChatWidget selectedStory={selectedStory} selectedEpic={selectedEpic} />
             </div>
           </div>
         </>

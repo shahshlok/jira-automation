@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Send } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Story } from '@/lib/apiHelpers';
+import { EpicWithStories } from '@/lib/dashboard/types';
 
 interface Message {
   id: string;
@@ -11,20 +13,25 @@ interface Message {
   content: string;
 }
 
+interface ChatWidgetProps {
+  selectedStory?: Story | null;
+  selectedEpic?: EpicWithStories | null;
+}
+
 function safeDevLog(label: string, data: unknown) {
   if (process.env.NODE_ENV !== 'development') return;
   console.log(label, data);
 }
 
-export default function ChatWidget() {
+export default function ChatWidget({ selectedStory, selectedEpic }: ChatWidgetProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generateId = () => Math.random().toString(36).substr(2, 9);
+  const generateId = () => Math.random().toString(36).substring(2, 11);
 
-  const handleSend = async (messageToSend?: string) => {
+  const handleSend = async (messageToSend?: string, requestType?: 'general' | 'test-cases' | 'user-stories') => {
     const messageContent = messageToSend || inputValue.trim();
     if (!messageContent) return;
 
@@ -40,13 +47,30 @@ export default function ChatWidget() {
     setError(null);
 
     try {
+      // Prepare context for AI calls
+      const context = {
+        story: selectedStory ? {
+          key: selectedStory.key,
+          summary: selectedStory.summary,
+          epicLink: selectedStory.epicLink
+        } : undefined,
+        epic: selectedEpic ? {
+          key: selectedEpic.key,
+          summary: selectedEpic.summary
+        } : undefined
+      };
+
       // Always use our secure backend API route
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: userMessage.content }),
+        body: JSON.stringify({ 
+          message: userMessage.content,
+          type: requestType || 'general',
+          context
+        }),
       });
 
       if (!response.ok) {
@@ -80,8 +104,8 @@ export default function ChatWidget() {
     }
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    handleSend(suggestion);
+  const handleSuggestionClick = (suggestion: string, requestType?: 'general' | 'test-cases' | 'user-stories') => {
+    handleSend(suggestion, requestType);
   };
 
   return (
@@ -144,22 +168,34 @@ export default function ChatWidget() {
           {/* Small Action Buttons */}
           <div className="flex flex-wrap gap-2">
             <Button
-              onClick={() => handleSuggestionClick("Generate comprehensive test case ideas for software features, including edge cases, positive scenarios, and negative scenarios.")}
+              onClick={() => {
+                if (selectedStory) {
+                  handleSuggestionClick(`Generate exactly 5 test cases for the user story: ${selectedStory.summary}`, 'test-cases');
+                } else {
+                  handleSuggestionClick("Generate comprehensive test case ideas for software features, including edge cases, positive scenarios, and negative scenarios.");
+                }
+              }}
               disabled={isLoading}
               variant="outline"
               size="sm"
               className="text-xs px-3 py-1.5 h-auto rounded-full border-gray-200 hover:bg-gray-50 text-gray-700"
             >
-              Generate Tests
+              Generate Tests {selectedStory && `(${selectedStory.key})`}
             </Button>
             <Button
-              onClick={() => handleSuggestionClick("Generate creative and detailed user story ideas following the 'As a [user], I want [goal] so that [benefit]' format.")}
+              onClick={() => {
+                if (selectedEpic) {
+                  handleSuggestionClick(`Generate 3 user stories for the epic: ${selectedEpic.summary}`, 'user-stories');
+                } else {
+                  handleSuggestionClick("Generate creative and detailed user story ideas following the 'As a [user], I want [goal] so that [benefit]' format.");
+                }
+              }}
               disabled={isLoading}
               variant="outline"
               size="sm"
               className="text-xs px-3 py-1.5 h-auto rounded-full border-gray-200 hover:bg-gray-50 text-gray-700"
             >
-              Generate Stories
+              Generate Stories {selectedEpic && `(${selectedEpic.key})`}
             </Button>
           </div>
 

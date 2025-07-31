@@ -197,8 +197,8 @@ export async function logout(): Promise<void> {
 // Bulk data types for global search
 export interface BulkData {
   projects: Project[];
-  epics: Epic & { projectKey: string; projectName: string }[];
-  stories: Story & { projectKey: string; projectName: string; status: string }[];
+  epics: (Epic & { projectKey: string; projectName: string })[];
+  stories: (Story & { projectKey: string; projectName: string; status: string })[];
   tasks: {
     key: string;
     summary: string;

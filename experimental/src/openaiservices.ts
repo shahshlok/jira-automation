@@ -1,31 +1,38 @@
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPEN_AI_KEY,
 });
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-async function chatTextResponse(messages: { role: "user" | "system" | "assistant"; content: string }[]) {
-    const res = await openai.responses.create({
-      model: MODEL,
-      input: messages,
-    });
-    return res.output_text || "";
-  }
 
 // Test-case generator using Responses API
-export async function generateTestCases(storySummary: string) {
+export async function generateTestCases(userStoryData: {
+  title?: string;
+  description?: string;
+  acceptanceCriteria?: string;
+  epicTitle?: string;
+  epicDescription?: string;
+}) {
+    const contextInfo = [
+      userStoryData.title && `User Story Title: ${userStoryData.title}`,
+      userStoryData.description && `Description: ${userStoryData.description}`,
+      userStoryData.acceptanceCriteria && `Acceptance Criteria: ${userStoryData.acceptanceCriteria}`,
+      userStoryData.epicTitle && `Epic: ${userStoryData.epicTitle}`,
+      userStoryData.epicDescription && `Epic Description: ${userStoryData.epicDescription}`
+    ].filter(Boolean).join('\n');
+
     const response = await openai.responses.create({
       model: MODEL,
       input: [
         {
           role: "system",
-          content: "You are a QA assistant. Generate test cases in plain text format with clear sections for title, description, steps, and expected result."
+          content: "You are a QA assistant. Generate exactly 5 short test cases specific to the user story provided. Each test case should have: title, description, steps, and expected result. Keep each test case concise and focused."
         },
         {
           role: "user",
-          content: `Generate 5 test cases for: "${storySummary}"`
+          content: `Generate exactly 5 test cases for this user story:\n\n${contextInfo}`
         }
       ]
     });
@@ -40,7 +47,7 @@ export async function generateTestCases(storySummary: string) {
       input: [
         {
           role: "system",
-          content: "You are a BA assistant. Generate user stories in plain text format with clear sections for title, description, acceptance criteria, and priority."
+          content: "You are a BA assistant. Generate user stories in plain text format with clear sections for title, description, acceptance criteria, and priority. Keep responses short with 3 bullet points max per story."
         },
         {
           role: "user",
