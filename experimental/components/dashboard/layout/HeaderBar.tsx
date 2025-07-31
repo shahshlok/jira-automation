@@ -1,4 +1,4 @@
-import { LogOut, User } from "lucide-react";
+import { LogOut, User, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -23,6 +23,8 @@ interface HeaderBarProps {
     onEpicSelect: (epic: EpicWithStories) => void;
     onStorySelect: (story: Story) => void;
     onLogout: () => void;
+    onRefresh?: () => void;
+    isRefreshing?: boolean;
 }
 
 export const HeaderBar = ({
@@ -35,6 +37,8 @@ export const HeaderBar = ({
     onEpicSelect,
     onStorySelect,
     onLogout,
+    onRefresh,
+    isRefreshing = false,
 }: HeaderBarProps) => {
     return (
         <header className="bg-white border-b border-gray-200 px-6 py-4">
@@ -49,6 +53,19 @@ export const HeaderBar = ({
                     <div className="text-sm text-gray-500">
                         Last updated: {currentTime.toLocaleTimeString()}
                     </div>
+
+                    {onRefresh && (
+                        <Button
+                            onClick={onRefresh}
+                            disabled={isRefreshing}
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-3"
+                        >
+                            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                        </Button>
+                    )}
 
                     <InlineSearch 
                         projects={projects}

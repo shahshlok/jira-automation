@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     fetchProjects,
     fetchEpics,
@@ -12,6 +12,13 @@ import {
     Story,
     TestCase,
 } from "@/lib/apiHelpers";
+
+// Message interface for chat conversations
+interface Message {
+    id: string;
+    role: 'user' | 'bot';
+    content: string;
+}
 import { saveProject, loadProject, clearProject } from "@/lib/projectStorage";
 import { EpicWithStories } from "@/lib/dashboard/types";
 import { ProjectsSidebar } from "@/components/dashboard/layout/ProjectsSidebar";
@@ -43,9 +50,13 @@ export default function Dashboard() {
     const [chatOpen, setChatOpen] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
 
+    // Chat conversation state - persists across chat popup open/close
+    const [conversations, setConversations] = useState<Record<string, Message[]>>({});
+
     // Loading states
     const [loadingProjects, setLoadingProjects] = useState(true);
     const [loadingData, setLoadingData] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [user, setUser] = useState<any>(null);
 
     // Load user info and projects on mount
@@ -87,75 +98,90 @@ export default function Dashboard() {
         loadInitialData();
     }, []);
 
-    // Load epics and stories when project changes
-    useEffect(() => {
-        const loadProjectData = async () => {
-            if (!selectedProject) {
-                setEpicsWithStories([]);
-                return;
-            }
+    // Function to load project data (epics, stories, test cases)
+    const loadProjectData = useCallback(async (isRefresh = false) => {
+        if (!selectedProject) {
+            setEpicsWithStories([]);
+            return;
+        }
 
+        if (isRefresh) {
+            setIsRefreshing(true);
+        } else {
             setLoadingData(true);
-            try {
-                const [epics, stories] = await Promise.all([
-                    fetchEpics(selectedProject.key),
-                    fetchStories(selectedProject.key),
-                ]);
+        }
 
-                // Group stories by their Epic Link
-                const storiesByEpic: Record<string, Story[]> = {};
+        try {
+            const [epics, stories] = await Promise.all([
+                fetchEpics(selectedProject.key),
+                fetchStories(selectedProject.key),
+            ]);
 
-                stories.forEach((story) => {
-                    const epicKey = story.epicLink;
-                    if (epicKey) {
-                        if (!storiesByEpic[epicKey]) {
-                            storiesByEpic[epicKey] = [];
-                        }
-                        storiesByEpic[epicKey].push(story);
+            // Group stories by their Epic Link
+            const storiesByEpic: Record<string, Story[]> = {};
+
+            stories.forEach((story) => {
+                const epicKey = story.epicLink;
+                if (epicKey) {
+                    if (!storiesByEpic[epicKey]) {
+                        storiesByEpic[epicKey] = [];
                     }
-                });
+                    storiesByEpic[epicKey].push(story);
+                }
+            });
 
-                // Combine epics with their stories
-                const epicsWithStoriesData: EpicWithStories[] = epics.map(
-                    (epic) => ({
-                        ...epic,
-                        stories: storiesByEpic[epic.key] || [],
-                    }),
-                );
+            // Combine epics with their stories
+            const epicsWithStoriesData: EpicWithStories[] = epics.map(
+                (epic) => ({
+                    ...epic,
+                    stories: storiesByEpic[epic.key] || [],
+                }),
+            );
 
-                setEpicsWithStories(epicsWithStoriesData);
+            setEpicsWithStories(epicsWithStoriesData);
 
-                // Load test cases for all stories
-                const testCasesPromises = stories.map(async (story) => {
-                    try {
-                        const testCases = await fetchTestCases(story.key);
-                        return { storyKey: story.key, testCases };
-                    } catch (error) {
-                        console.error(
-                            `Failed to load test cases for ${story.key}:`,
-                            error,
-                        );
-                        return { storyKey: story.key, testCases: [] };
-                    }
-                });
+            // Load test cases for all stories
+            const testCasesPromises = stories.map(async (story) => {
+                try {
+                    const testCases = await fetchTestCases(story.key);
+                    return { storyKey: story.key, testCases };
+                } catch (error) {
+                    console.error(
+                        `Failed to load test cases for ${story.key}:`,
+                        error,
+                    );
+                    return { storyKey: story.key, testCases: [] };
+                }
+            });
 
-                const testCasesResults = await Promise.all(testCasesPromises);
-                const testCasesMap: Record<string, TestCase[]> = {};
-                testCasesResults.forEach((result) => {
-                    testCasesMap[result.storyKey] = result.testCases;
-                });
+            const testCasesResults = await Promise.all(testCasesPromises);
+            const testCasesMap: Record<string, TestCase[]> = {};
+            testCasesResults.forEach((result) => {
+                testCasesMap[result.storyKey] = result.testCases;
+            });
 
-                setTestCasesByStory(testCasesMap);
-            } catch (error) {
-                console.error("Error fetching project data:", error);
-                setEpicsWithStories([]);
-            } finally {
+            setTestCasesByStory(testCasesMap);
+
+            // Update the timestamp when refreshing
+            if (isRefresh) {
+                setCurrentTime(new Date());
+            }
+        } catch (error) {
+            console.error("Error fetching project data:", error);
+            setEpicsWithStories([]);
+        } finally {
+            if (isRefresh) {
+                setIsRefreshing(false);
+            } else {
                 setLoadingData(false);
             }
-        };
-
-        loadProjectData();
+        }
     }, [selectedProject]);
+
+    // Load epics and stories when project changes
+    useEffect(() => {
+        loadProjectData();
+    }, [loadProjectData]);
 
     // Update clock
     useEffect(() => {
@@ -170,6 +196,10 @@ export default function Dashboard() {
         saveProject(project.key);
         setSelectedEpic(null);
         setSelectedStory(null);
+    };
+
+    const handleRefresh = () => {
+        loadProjectData(true);
     };
 
     const handleLogout = async () => {
@@ -216,6 +246,8 @@ export default function Dashboard() {
                     onEpicSelect={setSelectedEpic}
                     onStorySelect={setSelectedStory}
                     onLogout={handleLogout}
+                    onRefresh={handleRefresh}
+                    isRefreshing={isRefreshing}
                 />
 
                 <div className="flex-1 flex">
@@ -268,6 +300,8 @@ export default function Dashboard() {
                 onOpenChange={setChatOpen}
                 selectedStory={selectedStory}
                 selectedEpic={selectedEpic}
+                conversations={conversations}
+                setConversations={setConversations}
             />
 
         </div>

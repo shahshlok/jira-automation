@@ -8,31 +8,43 @@ const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 
 // Test-case generator using Responses API
-export async function generateTestCases(userStoryData: {
-  title?: string;
-  description?: string;
-  acceptanceCriteria?: string;
-  epicTitle?: string;
-  epicDescription?: string;
-}) {
-    const contextInfo = [
-      userStoryData.title && `User Story Title: ${userStoryData.title}`,
-      userStoryData.description && `Description: ${userStoryData.description}`,
-      userStoryData.acceptanceCriteria && `Acceptance Criteria: ${userStoryData.acceptanceCriteria}`,
-      userStoryData.epicTitle && `Epic: ${userStoryData.epicTitle}`,
-      userStoryData.epicDescription && `Epic Description: ${userStoryData.epicDescription}`
-    ].filter(Boolean).join('\n');
-
+export async function generateTestCases(storySummary: string) {
     const response = await openai.responses.create({
       model: MODEL,
       input: [
         {
           role: "system",
-          content: "You are a QA assistant. Generate exactly 5 short test cases specific to the user story provided. Each test case should have: title, description, steps, and expected result. Keep each test case concise and focused."
+          content: `You are a QA assistant. Generate exactly 5 test cases based on the provided user story context.
+
+Format your response exactly as follows:
+
+**TEST CASES:**
+
+**Test Case 1: [Title]**
+- **Description:** [Brief description]
+- **Steps:** 
+  1. [Step 1]
+  2. [Step 2]
+  3. [Step 3]
+- **Expected Result:** [Expected outcome]
+
+[Continue for all 5 test cases]
+
+**SUMMARY:**
+• Test Case 1: [One sentence summary]
+• Test Case 2: [One sentence summary]
+• Test Case 3: [One sentence summary]
+• Test Case 4: [One sentence summary]
+• Test Case 5: [One sentence summary]
+
+**FOLLOW-UP:**
+Are these test cases acceptable?
+- If yes: Would you like to export these to Jira?
+- If no: Would you like to regenerate or modify them?`
         },
         {
           role: "user",
-          content: `Generate exactly 5 test cases for this user story:\n\n${contextInfo}`
+          content: `Generate test cases for the user story: "${storySummary}"`
         }
       ]
     });
@@ -47,11 +59,35 @@ export async function generateTestCases(userStoryData: {
       input: [
         {
           role: "system",
-          content: "You are a BA assistant. Generate user stories in plain text format with clear sections for title, description, acceptance criteria, and priority. Keep responses short with 3 bullet points max per story."
+          content: `You are a BA assistant. Generate exactly 3 user stories based on the provided epic context.
+
+Format your response exactly as follows:
+
+**USER STORIES:**
+
+**User Story 1: [Title]**
+- **Description:** As a [user type], I want [goal] so that [benefit]
+- **Acceptance Criteria:**
+  • [Criteria 1]
+  • [Criteria 2]
+  • [Criteria 3]
+- **Priority:** [High/Medium/Low]
+
+[Continue for all 3 user stories]
+
+**SUMMARY:**
+• User Story 1: [One sentence summary of the goal]
+• User Story 2: [One sentence summary of the goal]
+• User Story 3: [One sentence summary of the goal]
+
+**FOLLOW-UP:**
+Are these user stories acceptable?
+- If yes: Would you like to add these to the epic in Jira?
+- If no: Would you like to regenerate or modify them?`
         },
         {
           role: "user",
-          content: `Generate 3 user stories for epic: "${epicSummary}"`
+          content: `Generate exactly 3 user stories for the epic: "${epicSummary}"`
         }
       ]
     });

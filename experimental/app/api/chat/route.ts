@@ -49,11 +49,8 @@ export async function POST(request: NextRequest) {
 
     if (type === 'test-cases' && context?.story) {
       // Generate test cases with story context
-      content = await generateTestCases({
-        title: context.story.summary,
-        description: message, // Use the message as additional context
-        epicTitle: context.epic?.summary
-      });
+      const storyContext = `${context.story.summary}${context.epic ? ` (Epic: ${context.epic.summary})` : ''}`;
+      content = await generateTestCases(storyContext);
     } else if (type === 'user-stories' && context?.epic) {
       // Generate user stories with epic context
       content = await generateUserStories(context.epic.summary);

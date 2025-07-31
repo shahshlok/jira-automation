@@ -7,14 +7,23 @@ import ChatWidget from './ChatWidget';
 import { Story } from '@/lib/apiHelpers';
 import { EpicWithStories } from '@/lib/dashboard/types';
 
+// Message interface for chat conversations
+interface Message {
+  id: string;
+  role: 'user' | 'bot';
+  content: string;
+}
+
 interface ChatPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedStory?: Story | null;
   selectedEpic?: EpicWithStories | null;
+  conversations: Record<string, Message[]>;
+  setConversations: React.Dispatch<React.SetStateAction<Record<string, Message[]>>>;
 }
 
-export const ChatPopup = ({ open, onOpenChange, selectedStory, selectedEpic }: ChatPopupProps) => {
+export const ChatPopup = ({ open, onOpenChange, selectedStory, selectedEpic, conversations, setConversations }: ChatPopupProps) => {
   const [isSpinning, setIsSpinning] = useState(false);
 
   useEffect(() => {
@@ -81,7 +90,12 @@ export const ChatPopup = ({ open, onOpenChange, selectedStory, selectedEpic }: C
 
             {/* Chat Widget */}
             <div className="flex-1 overflow-hidden">
-              <ChatWidget selectedStory={selectedStory} selectedEpic={selectedEpic} />
+              <ChatWidget 
+                selectedStory={selectedStory} 
+                selectedEpic={selectedEpic}
+                conversations={conversations}
+                setConversations={setConversations}
+              />
             </div>
           </div>
         </>

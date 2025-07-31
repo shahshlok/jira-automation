@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Send } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Story } from '@/lib/apiHelpers';
@@ -16,6 +17,8 @@ interface Message {
 interface ChatWidgetProps {
   selectedStory?: Story | null;
   selectedEpic?: EpicWithStories | null;
+  conversations: Record<string, Message[]>;
+  setConversations: React.Dispatch<React.SetStateAction<Record<string, Message[]>>>;
 }
 
 function safeDevLog(label: string, data: unknown) {
@@ -23,11 +26,24 @@ function safeDevLog(label: string, data: unknown) {
   console.log(label, data);
 }
 
-export default function ChatWidget({ selectedStory, selectedEpic }: ChatWidgetProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export default function ChatWidget({ selectedStory, selectedEpic, conversations, setConversations }: ChatWidgetProps) {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Get current conversation key based on selected story/epic
+  const getCurrentConversationKey = useCallback(() => {
+    if (selectedStory) {
+      return `story-${selectedStory.key}`;
+    } else if (selectedEpic) {
+      return `epic-${selectedEpic.key}`;
+    }
+    return 'general';
+  }, [selectedStory, selectedEpic]);
+
+  // Get current messages for the active conversation
+  const conversationKey = getCurrentConversationKey();
+  const currentMessages = conversations[conversationKey] || [];
 
   const generateId = () => Math.random().toString(36).substring(2, 11);
 
@@ -41,7 +57,11 @@ export default function ChatWidget({ selectedStory, selectedEpic }: ChatWidgetPr
       content: messageContent
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    // Add message to current conversation
+    setConversations(prev => ({
+      ...prev,
+      [conversationKey]: [...(prev[conversationKey] || []), userMessage]
+    }));
     setInputValue('');
     setIsLoading(true);
     setError(null);
@@ -87,7 +107,11 @@ export default function ChatWidget({ selectedStory, selectedEpic }: ChatWidgetPr
         content: botResponse
       };
 
-      setMessages(prev => [...prev, botMessage]);
+      // Add bot response to current conversation
+      setConversations(prev => ({
+        ...prev,
+        [conversationKey]: [...(prev[conversationKey] || []), botMessage]
+      }));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setError(`Failed to get response: ${errorMessage}`);
@@ -111,19 +135,24 @@ export default function ChatWidget({ selectedStory, selectedEpic }: ChatWidgetPr
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Empty state or welcome message when no messages */}
-      {messages.length === 0 && (
+      {currentMessages.length === 0 && (
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center">
             <h2 className="text-2xl font-medium text-gray-700 mb-2">Hi, how can I help you?</h2>
             <p className="text-gray-500 text-sm">Use the buttons below or type your question to get started</p>
+            {(selectedStory || selectedEpic) && (
+              <p className="text-gray-400 text-xs mt-2">
+                Context: {selectedStory ? `Story ${selectedStory.key}` : `Epic ${selectedEpic?.key}`}
+              </p>
+            )}
           </div>
         </div>
       )}
 
       {/* Messages Area - Only show when there are messages */}
-      {messages.length > 0 && (
+      {currentMessages.length > 0 && (
         <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-white">
-          {messages.map((message) => (
+          {currentMessages.map((message) => (
             <div
               key={message.id}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -135,7 +164,26 @@ export default function ChatWidget({ selectedStory, selectedEpic }: ChatWidgetPr
                     : 'bg-gray-100 text-gray-800'
                 }`}
               >
-                {message.content}
+                {message.role === 'bot' ? (
+                  <div className="prose prose-sm max-w-none prose-headings:text-gray-800 prose-p:text-gray-800 prose-li:text-gray-800 prose-strong:text-gray-900">
+                    <ReactMarkdown 
+                      components={{
+                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                        ul: ({ children }) => <ul className="mb-2 last:mb-0 pl-4 list-disc">{children}</ul>,
+                        ol: ({ children }) => <ol className="mb-2 last:mb-0 pl-4 list-decimal">{children}</ol>,
+                        li: ({ children }) => <li className="mb-1">{children}</li>,
+                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                        h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-md font-bold mb-2">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  message.content
+                )}
               </div>
             </div>
           ))}
