@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Upload, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -47,6 +47,185 @@ export default function ChatWidget({ selectedStory, selectedEpic, conversations,
 
   const generateId = () => Math.random().toString(36).substring(2, 11);
 
+  // Helper function to detect if message contains exportable content
+  const detectExportableContent = (content: string) => {
+    const hasTestCases = content.includes('**TEST CASES:**') || content.includes('**Test Case');
+    const hasUserStories = content.includes('**USER STORIES:**') || content.includes('**User Story');
+    return { hasTestCases, hasUserStories };
+  };
+
+  // Helper function to detect if user is confirming export
+  const detectExportConfirmation = (userMessage: string, messages: Message[]) => {
+    const normalizedMessage = userMessage.toLowerCase().trim();
+    
+    // Positive confirmation patterns
+    const positivePatterns = [
+      /^yes$/,
+      /^y$/,
+      /^ok$/,
+      /^okay$/,
+      /^sure$/,
+      /^go ahead$/,
+      /^export/,
+      /yes.*export/,
+      /export.*yes/,
+      /^confirm/,
+      /^do it$/,
+      /^proceed/
+    ];
+
+    const isPositive = positivePatterns.some(pattern => pattern.test(normalizedMessage));
+    
+    if (!isPositive) {
+      return { shouldExport: false, lastBotMessage: null, exportType: null };
+    }
+
+    // Find the last bot message that contains exportable content
+    const botMessages = messages.filter(m => m.role === 'bot').reverse();
+    
+    for (const botMessage of botMessages) {
+      const exportableContent = detectExportableContent(botMessage.content);
+      
+      // Check if the message contains follow-up questions about export
+      const hasExportQuestion = 
+        botMessage.content.includes('Would you like to export') ||
+        botMessage.content.includes('Would you like to add these') ||
+        botMessage.content.includes('export these to Jira') ||
+        botMessage.content.includes('add these to the epic in Jira');
+      
+      if (hasExportQuestion) {
+        if (exportableContent.hasTestCases) {
+          return { 
+            shouldExport: true, 
+            lastBotMessage: botMessage, 
+            exportType: 'test_case' as const 
+          };
+        } else if (exportableContent.hasUserStories) {
+          return { 
+            shouldExport: true, 
+            lastBotMessage: botMessage, 
+            exportType: 'story' as const 
+          };
+        }
+      }
+    }
+
+    return { shouldExport: false, lastBotMessage: null, exportType: null };
+  };
+
+  // Parse AI content into structured format
+  const parseAIContent = (content: string, type: 'test_case' | 'story') => {
+    if (type === 'test_case') {
+      return parseTestCases(content);
+    } else {
+      return parseUserStories(content);
+    }
+  };
+
+  // Parse test cases from AI response
+  const parseTestCases = (content: string) => {
+    const testCases = [];
+    const testCaseBlocks = content.split(/\*\*Test Case \d+:/);
+    
+    for (let i = 1; i < testCaseBlocks.length; i++) {
+      const block = testCaseBlocks[i].trim();
+      const lines = block.split('\n').filter(line => line.trim());
+      
+      const title = lines[0]?.replace(/\*\*/g, '').trim();
+      let description = '';
+      let steps = '';
+      let expected_result = '';
+      
+      let currentSection = '';
+      
+      for (let j = 1; j < lines.length; j++) {
+        const line = lines[j].trim();
+        
+        if (line.startsWith('- **Description:**')) {
+          currentSection = 'description';
+          description = line.replace('- **Description:**', '').trim();
+        } else if (line.startsWith('- **Steps:**')) {
+          currentSection = 'steps';
+        } else if (line.startsWith('- **Expected Result:**')) {
+          currentSection = 'expected_result';
+          expected_result = line.replace('- **Expected Result:**', '').trim();
+        } else if (line.match(/^\d+\./)) {
+          if (currentSection === 'steps') {
+            steps += (steps ? '\n' : '') + line;
+          }
+        } else if (line.length > 0 && !line.startsWith('**') && !line.startsWith('Are these')) {
+          if (currentSection === 'description' && !line.startsWith('- **')) {
+            description += (description ? ' ' : '') + line.replace(/^- /, '');
+          } else if (currentSection === 'expected_result' && !line.startsWith('- **')) {
+            expected_result += (expected_result ? ' ' : '') + line.replace(/^- /, '');
+          }
+        }
+      }
+      
+      if (title && description) {
+        testCases.push({
+          title,
+          description,
+          steps: steps || 'Steps to be defined',
+          expected_result: expected_result || 'Expected result to be defined'
+        });
+      }
+    }
+    
+    return testCases;
+  };
+
+  // Parse user stories from AI response
+  const parseUserStories = (content: string) => {
+    const userStories = [];
+    const storyBlocks = content.split(/\*\*User Story \d+:/);
+    
+    for (let i = 1; i < storyBlocks.length; i++) {
+      const block = storyBlocks[i].trim();
+      const lines = block.split('\n').filter(line => line.trim());
+      
+      const title = lines[0]?.replace(/\*\*/g, '').trim();
+      let description = '';
+      let acceptance_criteria = '';
+      let priority = 'Medium';
+      
+      let currentSection = '';
+      
+      for (let j = 1; j < lines.length; j++) {
+        const line = lines[j].trim();
+        
+        if (line.startsWith('- **Description:**')) {
+          currentSection = 'description';
+          description = line.replace('- **Description:**', '').trim();
+        } else if (line.startsWith('- **Acceptance Criteria:**')) {
+          currentSection = 'acceptance_criteria';
+        } else if (line.startsWith('- **Priority:**')) {
+          currentSection = 'priority';
+          priority = line.replace('- **Priority:**', '').trim();
+        } else if (line.startsWith('•')) {
+          if (currentSection === 'acceptance_criteria') {
+            acceptance_criteria += (acceptance_criteria ? '\n' : '') + line;
+          }
+        } else if (line.length > 0 && !line.startsWith('**') && !line.startsWith('Are these')) {
+          if (currentSection === 'description' && !line.startsWith('- **')) {
+            description += (description ? ' ' : '') + line.replace(/^- /, '');
+          }
+        }
+      }
+      
+      if (title && description) {
+        userStories.push({
+          title,
+          description,
+          acceptance_criteria: acceptance_criteria || 'Acceptance criteria to be defined',
+          priority: priority || 'Medium'
+        });
+      }
+    }
+    
+    return userStories;
+  };
+
   const handleSend = async (messageToSend?: string, requestType?: 'general' | 'test-cases' | 'user-stories') => {
     const messageContent = messageToSend || inputValue.trim();
     if (!messageContent) return;
@@ -57,12 +236,121 @@ export default function ChatWidget({ selectedStory, selectedEpic, conversations,
       content: messageContent
     };
 
+    // Check if this is a positive response to export question
+    const isExportConfirmation = detectExportConfirmation(messageContent, currentMessages);
+    
     // Add message to current conversation
     setConversations(prev => ({
       ...prev,
       [conversationKey]: [...(prev[conversationKey] || []), userMessage]
     }));
     setInputValue('');
+
+    // If this is an export confirmation, send special message to AI to trigger MCP tools
+    if (isExportConfirmation.shouldExport) {
+      const { lastBotMessage, exportType } = isExportConfirmation;
+      if (lastBotMessage && (selectedStory || selectedEpic)) {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+          // Create context for the export request
+          const context = {
+            story: selectedStory ? {
+              key: selectedStory.key,
+              summary: selectedStory.summary,
+              epicLink: selectedStory.epicLink
+            } : undefined,
+            epic: selectedEpic ? {
+              key: selectedEpic.key,
+              summary: selectedEpic.summary
+            } : undefined
+          };
+
+          const parentKey = exportType === 'test_case' ? selectedStory?.key : selectedEpic?.key;
+
+          // Parse the AI content and export directly using our backend
+          const items = parseAIContent(lastBotMessage.content, exportType);
+          
+          console.log('Parsed items for export:', items);
+          console.log('Export type:', exportType);
+          console.log('Parent key:', parentKey);
+          
+          if (!items || items.length === 0) {
+            throw new Error('No valid items found to export');
+          }
+          
+          const response = await fetch('/api/export-items', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include', // Important: include cookies
+            body: JSON.stringify({
+              type: exportType,
+              parentKey,
+              items
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+          }
+
+          const result = await response.json();
+          
+          // Create success message with issue keys
+          const successfulItems = result.results.filter((r: any) => r.success);
+          const failedItems = result.results.filter((r: any) => !r.success);
+          
+          let responseMessage = '';
+          if (successfulItems.length > 0) {
+            const issueKeys = successfulItems.map((r: any) => r.issueKey).join(', ');
+            responseMessage += `✅ Successfully created ${successfulItems.length} ${exportType === 'test_case' ? 'test cases' : 'user stories'} in Jira:\n${issueKeys}`;
+          }
+          
+          if (failedItems.length > 0) {
+            responseMessage += `\n\n❌ Failed to create ${failedItems.length} items:`;
+            failedItems.forEach((item: any) => {
+              responseMessage += `\n• ${item.item}: ${item.error}`;
+            });
+          }
+
+          const botMessage: Message = {
+            id: generateId(),
+            role: 'bot',
+            content: responseMessage
+          };
+
+          // Add bot response to conversation
+          setConversations(prev => ({
+            ...prev,
+            [conversationKey]: [...(prev[conversationKey] || []), botMessage]
+          }));
+
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'Export failed';
+          setError(`Export failed: ${errorMessage}`);
+          
+          // Add error message to conversation
+          const errorBotMessage = {
+            id: generateId(),
+            role: 'bot' as const,
+            content: `❌ Export failed: ${errorMessage}. Please try again or check your Jira connection.`
+          };
+
+          setConversations(prev => ({
+            ...prev,
+            [conversationKey]: [...(prev[conversationKey] || []), errorBotMessage]
+          }));
+        } finally {
+          setIsLoading(false);
+        }
+        return; // Don't continue with normal chat flow
+      }
+    }
+
     setIsLoading(true);
     setError(null);
 

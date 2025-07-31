@@ -7,7 +7,7 @@ const openai = new OpenAI({
 const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 
-// Test-case generator using Responses API
+// Test-case generator using standard Responses API (no MCP)
 export async function generateTestCases(storySummary: string) {
     const response = await openai.responses.create({
       model: MODEL,
@@ -48,7 +48,7 @@ Are these test cases acceptable?
         }
       ]
     });
-  
+    console.log(response.output_text)
     return response.output_text || "";
   }
   

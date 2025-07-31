@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { safeLog } from '@/lib/backend/jiraHelpers';
 import { generateChat, generateTestCases, generateUserStories } from '@/src/openaiservices';
 
@@ -43,7 +44,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    safeLog({ messageLength: message.length, type }, 'Making OpenAI API request', 'debug');
+    // Get auth token for MCP authentication
+    const cookieStore = await cookies();
+    const authToken = cookieStore.get('jira_auth')?.value;
+
+    safeLog({ messageLength: message.length, type, hasAuthToken: !!authToken }, 'Making OpenAI API request', 'debug');
 
     let content: string;
 
@@ -61,7 +66,7 @@ export async function POST(request: NextRequest) {
         ? 'You are a helpful assistant that can help with various software development tasks including generating test cases, user stories, code reviews, and answering technical questions. You must respond with valid JSON format.'
         : 'You are a helpful assistant that can help with various software development tasks including generating test cases, user stories, code reviews, and answering technical questions. Provide clear, practical, and actionable responses.';
 
-      // Use the new generateChat function from openaiService
+      // Use the new generateChat function from openaiService with auth token
       content = await generateChat([
         {
           role: 'system',
@@ -71,7 +76,7 @@ export async function POST(request: NextRequest) {
           role: 'user',
           content: message
         }
-      ]);
+      ], authToken);
     }
 
     safeLog({ contentLength: content?.length }, 'OpenAI response received', 'debug');
@@ -81,10 +86,20 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
+    // Log the full error details
+    console.error('Chat API error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      error: error
+    });
+    
     safeLog(error, 'Chat API error', 'error');
     
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? (error instanceof Error ? error.message : String(error)) : undefined
+      },
       { status: 500 }
     );
   }
