@@ -171,7 +171,7 @@ export const StoryGridView = ({
                             key={story.key}
                             className={`cursor-pointer transition-all hover:shadow-lg hover:scale-105 group ${
                                 selectedStory?.key === story.key
-                                    ? "ring-2 ring-emerald-500 bg-emerald-50"
+                                    ? "ring-2 ring-blue-300 bg-violet-50"
                                     : ""
                             }`}
                             onClick={() => onStorySelect(story)}
