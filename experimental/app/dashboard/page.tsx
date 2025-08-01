@@ -267,8 +267,32 @@ export default function Dashboard() {
         setSelectedStory(null);
     };
 
-    const handleRefresh = () => {
-        loadProjectData(true);
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        try {
+            console.log('🔄 Full refresh initiated - fetching latest data from JIRA...');
+            
+            // Clear cached data to force fresh API call
+            delete (window as any).__bulkData;
+            
+            // Trigger project data reload which will fetch fresh data
+            await loadProjectData(true);
+            
+            // Update projects list from the fresh bulk data
+            const bulkData = (window as any).__bulkData;
+            if (bulkData && bulkData.projects) {
+                setProjects(bulkData.projects);
+            }
+            
+            // Update timestamp
+            setCurrentTime(new Date());
+            
+            console.log('✅ Full refresh completed - all data updated');
+        } catch (error) {
+            console.error('❌ Refresh failed:', error);
+        } finally {
+            setIsRefreshing(false);
+        }
     };
 
     const handleLogout = async () => {
