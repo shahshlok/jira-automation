@@ -30,20 +30,25 @@ export async function GET(request: NextRequest) {
 
     const projects = projectsResponse.data.values || [];
     
-    // Then, get all issues (epics, stories, tasks, subtasks/test cases) using JQL search
-    // Using maxResults=1000 to get a large batch, can be paginated if needed
+    // Load all data upfront for fast navigation - optimize for development/small-medium teams
+    const startTime = Date.now();
+    
+    // Get all issues (epics, stories, tasks, subtasks/test cases) using optimized JQL search
     const issuesResponse = await axios.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/search`, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
       },
       params: {
-        jql: '(issuetype in (Epic, Story, Task, Bug) OR parent is not EMPTY) ORDER BY project, issuetype, summary',
+        jql: '(issuetype in (Epic, Story, Task, Bug, Sub-task) OR parent is not EMPTY) ORDER BY project, issuetype, summary',
         fields: 'key,summary,issuetype,project,assignee,priority,updated,parent,status',
-        maxResults: 1000,
+        maxResults: 1000, // Increase if needed for your org
         startAt: 0
       }
     });
+
+    const loadTime = Date.now() - startTime;
+    console.log(`📊 Bulk data loaded: ${issuesResponse.data.issues?.length || 0} issues in ${loadTime}ms`);
 
     const issues = issuesResponse.data.issues || [];
     
@@ -124,11 +129,25 @@ export async function GET(request: NextRequest) {
         metadata: {
           totalProjects: projects.length,
           totalIssues: issues.length,
+          loadTime: loadTime,
+          loadedAt: new Date().toISOString(),
+          breakdown: {
+            epics: epics.length,
+            stories: stories.length,
+            tasks: tasks.length,
+            testCases: testCases.length
+          },
+          performance: {
+            isNearLimit: issues.length > 800, // Alert at 80% of 1000 limit
+            memoryEstimate: Math.round((JSON.stringify(issues).length / 1024 / 1024) * 100) / 100, // MB
+            shouldConsiderPagination: issues.length >= 1000
+          },
           pagination: {
             startAt: issuesResponse.data.startAt,
             maxResults: issuesResponse.data.maxResults,
             total: issuesResponse.data.total,
-            isLast: issuesResponse.data.startAt + issuesResponse.data.maxResults >= issuesResponse.data.total
+            isLast: issuesResponse.data.startAt + issuesResponse.data.maxResults >= issuesResponse.data.total,
+            hasMoreData: issuesResponse.data.total > issuesResponse.data.maxResults
           }
         }
       }

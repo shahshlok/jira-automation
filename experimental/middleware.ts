@@ -25,13 +25,16 @@ export function middleware(request: NextRequest) {
   }
   
   // If no auth cookie or cloudId, redirect to login
-  if ((!authCookie || !cloudIdCookie) && pathname !== '/login') {
-    const loginUrl = new URL('/login', request.url);
-    return NextResponse.redirect(loginUrl);
+  if (!authCookie || !cloudIdCookie) {
+    if (pathname !== '/login') {
+      const loginUrl = new URL('/login', request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+    return NextResponse.next();
   }
   
-  // If already authenticated and trying to access login, redirect to dashboard
-  if (authCookie && cloudIdCookie && pathname === '/login') {
+  // If authenticated and accessing root, redirect to dashboard
+  if (pathname === '/') {
     const dashboardUrl = new URL('/dashboard', request.url);
     return NextResponse.redirect(dashboardUrl);
   }

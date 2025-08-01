@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
         ? 'You are a helpful assistant that can help with various software development tasks including generating test cases, user stories, code reviews, and answering technical questions. You must respond with valid JSON format.'
         : 'You are a helpful assistant that can help with various software development tasks including generating test cases, user stories, code reviews, and answering technical questions. Provide clear, practical, and actionable responses.';
 
-      // Use the new generateChat function from openaiService with auth token
+      // Use the new generateChat function from openaiService
       content = await generateChat([
         {
           role: 'system',
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
           role: 'user',
           content: message
         }
-      ], authToken);
+      ]);
     }
 
     safeLog({ contentLength: content?.length }, 'OpenAI response received', 'debug');

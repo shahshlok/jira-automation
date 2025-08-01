@@ -2,10 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-    fetchProjects,
-    fetchEpics,
-    fetchStories,
-    fetchTestCases,
+    fetchBulkData,
     checkAuth,
     logout,
     Project,
@@ -33,6 +30,9 @@ export default function Dashboard() {
     // Data state
     const [projects, setProjects] = useState<Project[]>([]);
     const [epicsWithStories, setEpicsWithStories] = useState<EpicWithStories[]>(
+        [],
+    );
+    const [allEpicsWithStories, setAllEpicsWithStories] = useState<EpicWithStories[]>(
         [],
     );
     const [testCasesByStory, setTestCasesByStory] = useState<
@@ -67,9 +67,31 @@ export default function Dashboard() {
                 const userData = await checkAuth();
                 setUser(userData);
 
-                // Load projects
-                const projectsData = await fetchProjects();
+                // Load ALL data upfront using bulk API
+                console.log('🚀 Loading all data upfront for fast navigation...');
+                const startTime = Date.now();
+                const bulkData = await fetchBulkData();
+                const loadTime = Date.now() - startTime;
+                
+                console.log(`⚡ Initial data loaded in ${loadTime}ms:`, {
+                    projects: bulkData.metadata.totalProjects,
+                    issues: bulkData.metadata.totalIssues,
+                    epics: bulkData.epics.length,
+                    stories: bulkData.stories.length,
+                    testCases: bulkData.testCases.length
+                });
+
+                // Show performance warning if needed  
+                if (bulkData.metadata.totalIssues > 800) {
+                    console.warn('⚠️ Approaching data limit. Consider pagination when you reach production scale.');
+                }
+
+                // Extract projects from bulk data
+                const projectsData = bulkData.projects;
                 setProjects(projectsData);
+                
+                // Store bulk data for fast project switching
+                (window as any).__bulkData = bulkData;
 
                 // Restore selected project from localStorage
                 const storedProjectKey = loadProject();
@@ -98,7 +120,7 @@ export default function Dashboard() {
         loadInitialData();
     }, []);
 
-    // Function to load project data (epics, stories, test cases)
+    // Function to load ALL project data upfront (epics, stories, test cases)
     const loadProjectData = useCallback(async (isRefresh = false) => {
         if (!selectedProject) {
             setEpicsWithStories([]);
@@ -112,15 +134,65 @@ export default function Dashboard() {
         }
 
         try {
-            const [epics, stories] = await Promise.all([
-                fetchEpics(selectedProject.key),
-                fetchStories(selectedProject.key),
-            ]);
+            let bulkData;
+            
+            if (isRefresh || !(window as any).__bulkData) {
+                // Load fresh data from API
+                console.log('🚀 Loading fresh data from API...');
+                const startTime = Date.now();
+                bulkData = await fetchBulkData();
+                const loadTime = Date.now() - startTime;
+                
+                console.log(`⚡ Data loaded in ${loadTime}ms:`, {
+                    projects: bulkData.metadata.totalProjects,
+                    issues: bulkData.metadata.totalIssues,
+                    epics: bulkData.epics.length,
+                    stories: bulkData.stories.length,
+                    testCases: bulkData.testCases.length
+                });
 
-            // Group stories by their Epic Link
+                // Show performance warning if needed  
+                if (bulkData.metadata.totalIssues > 800) {
+                    console.warn('⚠️ Approaching data limit. Consider pagination when you reach production scale.');
+                }
+                
+                // Update cached data
+                (window as any).__bulkData = bulkData;
+            } else {
+                // Use cached data for instant navigation
+                console.log('⚡ Using cached data for instant navigation');
+                bulkData = (window as any).__bulkData;
+            }
+
+            // Create complete epics with stories data for all projects (for sidebar progress bars)
+            const allStoriesByEpic: Record<string, Story[]> = {};
+            bulkData.stories.forEach((story: any) => {
+                const epicKey = story.epicLink;
+                if (epicKey) {
+                    if (!allStoriesByEpic[epicKey]) {
+                        allStoriesByEpic[epicKey] = [];
+                    }
+                    allStoriesByEpic[epicKey].push(story);
+                }
+            });
+
+            const allEpicsWithStoriesData: EpicWithStories[] = bulkData.epics.map(
+                (epic: any) => ({
+                    ...epic,
+                    stories: allStoriesByEpic[epic.key] || [],
+                }),
+            );
+
+            setAllEpicsWithStories(allEpicsWithStoriesData);
+
+            // Filter data for current project for main view
+            const projectEpics = bulkData.epics.filter((epic: any) => epic.projectKey === selectedProject.key);
+            const projectStories = bulkData.stories.filter((story: any) => story.projectKey === selectedProject.key);
+
+            // Group stories by their Epic Link for current project
             const storiesByEpic: Record<string, Story[]> = {};
 
-            stories.forEach((story) => {
+            projectStories.forEach((story: any) => {
                 const epicKey = story.epicLink;
                 if (epicKey) {
                     if (!storiesByEpic[epicKey]) {
@@ -130,9 +202,9 @@ export default function Dashboard() {
                 }
             });
 
-            // Combine epics with their stories
-            const epicsWithStoriesData: EpicWithStories[] = epics.map(
-                (epic) => ({
+            // Combine epics with their stories for current project
+            const epicsWithStoriesData: EpicWithStories[] = projectEpics.map(
+                (epic: any) => ({
                     ...epic,
                     stories: storiesByEpic[epic.key] || [],
                 }),
@@ -140,24 +212,21 @@ export default function Dashboard() {
 
             setEpicsWithStories(epicsWithStoriesData);
 
-            // Load test cases for all stories
-            const testCasesPromises = stories.map(async (story) => {
-                try {
-                    const testCases = await fetchTestCases(story.key);
-                    return { storyKey: story.key, testCases };
-                } catch (error) {
-                    console.error(
-                        `Failed to load test cases for ${story.key}:`,
-                        error,
-                    );
-                    return { storyKey: story.key, testCases: [] };
-                }
-            });
-
-            const testCasesResults = await Promise.all(testCasesPromises);
+            // Use test cases from bulk data (already loaded)
             const testCasesMap: Record<string, TestCase[]> = {};
-            testCasesResults.forEach((result) => {
-                testCasesMap[result.storyKey] = result.testCases;
+            
+            // Group test cases by their parent story
+            bulkData.testCases.forEach((testCase: any) => {
+                if (testCase.parentKey) {
+                    if (!testCasesMap[testCase.parentKey]) {
+                        testCasesMap[testCase.parentKey] = [];
+                    }
+                    testCasesMap[testCase.parentKey].push({
+                        key: testCase.key,
+                        summary: testCase.summary,
+                        status: testCase.status
+                    });
+                }
             });
 
             setTestCasesByStory(testCasesMap);
@@ -228,7 +297,7 @@ export default function Dashboard() {
             <ProjectsSidebar
                 projects={projects}
                 selectedProject={selectedProject}
-                epicsWithStories={epicsWithStories}
+                epicsWithStories={allEpicsWithStories}
                 testCasesByStory={testCasesByStory}
                 onProjectChange={handleProjectChange}
             />

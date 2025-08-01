@@ -83,10 +83,15 @@ export async function POST(request: NextRequest) {
               ]
             },
             issuetype: {
-              name: type === 'test_case' ? 'Task' : 'Story'
+              name: type === 'test_case' ? 'Sub-task' : 'Story'
             },
+            ...(type === 'test_case' && {
+              parent: {
+                key: parentKey // For test cases, set parent as subtask
+              }
+            }),
             ...(type === 'story' && {
-              customfield_10014: parentKey // Epic Link field - this might need adjustment
+              customfield_10014: parentKey // Epic Link field for user stories
             })
           }
         };
