@@ -49,6 +49,7 @@ export default function Dashboard() {
     const [selectedStory, setSelectedStory] = useState<Story | null>(null);
     const [chatOpen, setChatOpen] = useState(false);
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [lastDataRefresh, setLastDataRefresh] = useState<Date>(new Date());
 
     // Chat conversation state - persists across chat popup open/close
     const [conversations, setConversations] = useState<Record<string, Message[]>>({});
@@ -110,6 +111,9 @@ export default function Dashboard() {
                     setSelectedProject(projectToSelect);
                     saveProject(projectToSelect.key);
                 }
+
+                // Set initial data refresh timestamp
+                setLastDataRefresh(new Date());
             } catch (error) {
                 console.error("Failed to load initial data:", error);
             } finally {
@@ -231,10 +235,8 @@ export default function Dashboard() {
 
             setTestCasesByStory(testCasesMap);
 
-            // Update the timestamp when refreshing
-            if (isRefresh) {
-                setCurrentTime(new Date());
-            }
+            // Update the data refresh timestamp
+            setLastDataRefresh(new Date());
         } catch (error) {
             console.error("Error fetching project data:", error);
             setEpicsWithStories([]);
@@ -260,6 +262,40 @@ export default function Dashboard() {
         return () => clearInterval(timer);
     }, []);
 
+    // Auto-refresh data every 60 seconds
+    useEffect(() => {
+        if (!selectedProject) return;
+
+        const autoRefreshInterval = setInterval(async () => {
+            console.log('🔄 Auto-refresh: Fetching latest data...');
+            try {
+                // Clear cached data and trigger refresh
+                delete (window as any).__bulkData;
+                await loadProjectData(true);
+                
+                // Update projects list from fresh data
+                const bulkData = (window as any).__bulkData;
+                if (bulkData && bulkData.projects) {
+                    setProjects(bulkData.projects);
+                }
+                
+                console.log('✅ Auto-refresh completed');
+            } catch (error) {
+                console.error('❌ Auto-refresh failed:', error);
+                
+                // Check if it's an authentication error
+                if (error && typeof error === 'object' && 'status' in error && error.status === 401) {
+                    console.warn('🔐 Authentication expired during auto-refresh. Please refresh the page to re-authenticate.');
+                    // Optionally, you could redirect to login or show a notification
+                    // For now, just stop the auto-refresh to prevent spam
+                    clearInterval(autoRefreshInterval);
+                }
+            }
+        }, 60000); // 60 seconds
+
+        return () => clearInterval(autoRefreshInterval);
+    }, [selectedProject, loadProjectData]);
+
     const handleProjectChange = (project: Project) => {
         setSelectedProject(project);
         saveProject(project.key);
@@ -283,9 +319,6 @@ export default function Dashboard() {
             if (bulkData && bulkData.projects) {
                 setProjects(bulkData.projects);
             }
-            
-            // Update timestamp
-            setCurrentTime(new Date());
             
             console.log('✅ Full refresh completed - all data updated');
         } catch (error) {
@@ -333,6 +366,7 @@ export default function Dashboard() {
                     selectedProject={selectedProject}
                     user={user}
                     currentTime={currentTime}
+                    lastDataRefresh={lastDataRefresh}
                     projects={projects}
                     epicsWithStories={epicsWithStories}
                     onProjectSelect={handleProjectChange}

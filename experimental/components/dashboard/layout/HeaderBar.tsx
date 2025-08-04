@@ -17,6 +17,7 @@ interface HeaderBarProps {
     selectedProject: Project | null;
     user: any;
     currentTime: Date;
+    lastDataRefresh?: Date;
     projects: Project[];
     epicsWithStories: EpicWithStories[];
     onProjectSelect: (project: Project) => void;
@@ -31,6 +32,7 @@ export const HeaderBar = ({
     selectedProject,
     user,
     currentTime,
+    lastDataRefresh,
     projects,
     epicsWithStories,
     onProjectSelect,
@@ -51,7 +53,7 @@ export const HeaderBar = ({
 
                 <div className="flex items-center space-x-4">
                     <div className="text-sm text-gray-500">
-                        Last updated: {currentTime.toLocaleTimeString()}
+                        Last updated: {lastDataRefresh ? lastDataRefresh.toLocaleTimeString() : currentTime.toLocaleTimeString()}
                     </div>
 
                     {onRefresh && (
