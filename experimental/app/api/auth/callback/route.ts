@@ -58,12 +58,14 @@ export async function GET(request: NextRequest) {
     cookieStore.set('cloudId', primarySite.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       maxAge: 24 * 60 * 60
     });
     
     cookieStore.set('siteName', primarySite.name, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       maxAge: 24 * 60 * 60
     });
     

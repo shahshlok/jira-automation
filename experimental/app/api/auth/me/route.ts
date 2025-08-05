@@ -34,7 +34,16 @@ export async function GET(request: NextRequest) {
       picture: userData.avatarUrls?.['48x48'] || userData.avatarUrls?.['32x32']
     });
   } catch (error: any) {
-    safeLog({ error: error.message }, 'User info fetch error');
+    safeLog({ error: error.message, status: error.response?.status }, 'User info fetch error');
+    
+    // If token is expired or invalid, clear the cookies
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      cookieStore.delete('jira_auth');
+      cookieStore.delete('cloudId');
+      cookieStore.delete('siteName');
+      console.log('Cleared expired auth cookies');
+    }
+    
     return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
   }
 }

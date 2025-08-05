@@ -34,7 +34,7 @@ export async function GET(
         'Accept': 'application/json'
       },
       params: {
-        jql: `project=${projectKey} AND issuetype=Story AND parent IS NOT EMPTY`
+        jql: `project=${projectKey} AND issuetype=Story`
       }
     });
     

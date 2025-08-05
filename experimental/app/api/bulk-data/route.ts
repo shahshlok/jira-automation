@@ -33,24 +33,45 @@ export async function GET(request: NextRequest) {
     // Load all data upfront for fast navigation - optimize for development/small-medium teams
     const startTime = Date.now();
     
-    // Get all issues (epics, stories, tasks, subtasks/test cases) using optimized JQL search
-    const issuesResponse = await axios.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/search`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json'
-      },
-      params: {
-        jql: '(issuetype in (Epic, Story, Task, Bug, Sub-task) OR parent is not EMPTY) ORDER BY project, issuetype, summary',
-        fields: 'key,summary,issuetype,project,assignee,priority,updated,parent,status',
-        maxResults: 1000, // Increase if needed for your org
-        startAt: 0
+    // Get all issues with pagination support
+    let allIssues: any[] = [];
+    let startAt = 0;
+    const maxResults = 100; // Smaller batch size for better performance
+    let hasMoreData = true;
+    
+    while (hasMoreData) {
+      const issuesResponse = await axios.get(`https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/search`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+        params: {
+          jql: '(issuetype in (Epic, Story, Task, Bug, Sub-task) OR parent is not EMPTY) ORDER BY project, issuetype, summary',
+          fields: 'key,summary,issuetype,project,assignee,priority,updated,parent,status,customfield_10014', // Include Epic Link
+          maxResults: maxResults,
+          startAt: startAt
+        }
+      });
+      
+      const batchIssues = issuesResponse.data.issues || [];
+      allIssues = allIssues.concat(batchIssues);
+      
+      // Check if there are more results
+      hasMoreData = batchIssues.length === maxResults && 
+                    startAt + maxResults < issuesResponse.data.total;
+      startAt += maxResults;
+      
+      // Safety limit to prevent infinite loops
+      if (allIssues.length >= 5000) {
+        safeLog({ totalFetched: allIssues.length }, 'Reached safety limit for bulk data fetch');
+        break;
       }
-    });
+    }
 
     const loadTime = Date.now() - startTime;
-    console.log(`📊 Bulk data loaded: ${issuesResponse.data.issues?.length || 0} issues in ${loadTime}ms`);
+    console.log(`📊 Bulk data loaded: ${allIssues.length} issues in ${loadTime}ms`);
 
-    const issues = issuesResponse.data.issues || [];
+    const issues = allIssues;
     
     // Group issues by type and project
     const epics = issues.filter((issue: any) => issue.fields.issuetype.name === 'Epic');
@@ -95,7 +116,8 @@ export async function GET(request: NextRequest) {
             iconUrl: issue.fields.priority?.iconUrl || ''
           },
           updated: issue.fields.updated,
-          epicLink: issue.fields.parent?.key,
+          // Check both parent and Epic Link field (customfield_10014 is common Epic Link field)
+          epicLink: issue.fields.parent?.key || issue.fields.customfield_10014,
           projectKey: issue.fields.project.key,
           projectName: issue.fields.project.name,
           status: issue.fields.status?.name || 'Unknown'
@@ -143,11 +165,10 @@ export async function GET(request: NextRequest) {
             shouldConsiderPagination: issues.length >= 1000
           },
           pagination: {
-            startAt: issuesResponse.data.startAt,
-            maxResults: issuesResponse.data.maxResults,
-            total: issuesResponse.data.total,
-            isLast: issuesResponse.data.startAt + issuesResponse.data.maxResults >= issuesResponse.data.total,
-            hasMoreData: issuesResponse.data.total > issuesResponse.data.maxResults
+            totalFetched: allIssues.length,
+            batchSize: maxResults,
+            reachedSafetyLimit: allIssues.length >= 5000,
+            note: 'All available data fetched with pagination'
           }
         }
       }
