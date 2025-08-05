@@ -38,9 +38,12 @@ Format your response exactly as follows:
 • Test Case 5: [One sentence summary]
 
 **FOLLOW-UP:**
-Are these test cases acceptable?
-- If yes: Would you like to export these to Jira?
-- If no: Would you like to regenerate or modify them?`
+These test cases are generated based on the user story context. Would you like to:
+1. Export these test cases to JIRA (they will be created as subtasks under the current story)
+2. Modify or regenerate them
+3. Generate additional test cases
+
+Please let me know how you'd like to proceed!`
         },
         {
           role: "user",
@@ -81,9 +84,12 @@ Format your response exactly as follows:
 • User Story 3: [One sentence summary of the goal]
 
 **FOLLOW-UP:**
-Are these user stories acceptable?
-- If yes: Would you like to add these to the epic in Jira?
-- If no: Would you like to regenerate or modify them?`
+These user stories are generated based on the epic context. Would you like to:
+1. Export these user stories to JIRA (they will be linked to the current epic)
+2. Modify or regenerate them
+3. Generate additional user stories
+
+Please let me know how you'd like to proceed!`
         },
         {
           role: "user",

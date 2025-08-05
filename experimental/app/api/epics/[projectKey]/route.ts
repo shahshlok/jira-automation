@@ -34,7 +34,10 @@ export async function GET(
         'Accept': 'application/json'
       },
       params: {
-        jql: `project=${projectKey} AND issuetype=Epic`
+        jql: `project=${projectKey} AND issuetype=Epic`,
+        fields: 'key,summary,issuetype,project,assignee,priority,updated,status',
+        maxResults: 1000,
+        startAt: 0
       }
     });
     

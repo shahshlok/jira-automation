@@ -13,13 +13,14 @@ export default function Login() {
   useEffect(() => {
     const checkAuthentication = async () => {
       try {
-        await checkAuth();
+        const response = await checkAuth();
+        console.log('Auth check successful:', response);
         // User is already authenticated, redirect to dashboard
         router.push('/dashboard');
         return;
       } catch (error) {
         // User is not authenticated, show login form
-        console.log('User not authenticated, showing login form');
+        console.log('User not authenticated, showing login form:', error);
       } finally {
         setIsChecking(false);
       }

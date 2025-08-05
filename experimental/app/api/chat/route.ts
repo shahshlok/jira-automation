@@ -61,12 +61,16 @@ export async function POST(request: NextRequest) {
       content = await generateUserStories(context.epic.summary);
     } else {
       // General purpose system prompt for unified chat
-      const jsonMode = process.env.OPENAI_JSON_MODE === 'true';
-      const systemPrompt = jsonMode 
-        ? 'You are a helpful assistant that can help with various software development tasks including generating test cases, user stories, code reviews, and answering technical questions. You must respond with valid JSON format.'
-        : 'You are a helpful assistant that can help with various software development tasks including generating test cases, user stories, code reviews, and answering technical questions. Provide clear, practical, and actionable responses.';
+      let systemPrompt = 'You are a helpful assistant that can help with various software development tasks including generating test cases, user stories, code reviews, and answering technical questions. Provide clear, practical, and actionable responses.';
+      
+      // Add simple context if available
+      if (context?.story) {
+        systemPrompt += `\n\nContext: Currently working on User Story ${context.story.key}: ${context.story.summary}`;
+      } else if (context?.epic) {
+        systemPrompt += `\n\nContext: Currently working on Epic ${context.epic.key}: ${context.epic.summary}`;
+      }
 
-      // Use the new generateChat function from openaiService
+      // Use the generateChat function from openaiService
       content = await generateChat([
         {
           role: 'system',

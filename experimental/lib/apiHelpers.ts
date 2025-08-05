@@ -59,6 +59,12 @@ export async function fetchProjects(): Promise<Project[]> {
       credentials: 'include'
     });
     
+    if (response.status === 401) {
+      // Session expired, redirect to login
+      window.location.href = '/login';
+      throw new Error('Session expired');
+    }
+    
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
@@ -170,15 +176,18 @@ export async function fetchTestCases(storyKey: string): Promise<TestCase[]> {
 export async function checkAuth(): Promise<any> {
   try {
     const response = await fetch('/api/auth/me', {
-      credentials: 'include'
+      credentials: 'include',
+      cache: 'no-cache' // Ensure fresh auth check
     });
     
     if (!response.ok) {
-      throw new Error('Not authenticated');
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Not authenticated');
     }
     
     return await response.json();
   } catch (error) {
+    console.error('Auth check failed:', error);
     throw error;
   }
 }
@@ -189,8 +198,13 @@ export async function logout(): Promise<void> {
       method: 'POST',
       credentials: 'include'
     });
+    
+    // Force reload to trigger middleware redirect to login
+    window.location.href = '/login';
   } catch (error) {
     console.error('Logout error:', error);
+    // Even if logout fails, redirect to login
+    window.location.href = '/login';
   }
 }
 
@@ -242,6 +256,12 @@ export async function fetchBulkData(): Promise<BulkData> {
     const response = await fetch('/api/bulk-data', {
       credentials: 'include'
     });
+    
+    if (response.status === 401) {
+      // Session expired, redirect to login
+      window.location.href = '/login';
+      throw new Error('Session expired');
+    }
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);

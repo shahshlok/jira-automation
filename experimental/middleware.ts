@@ -21,12 +21,13 @@ export function middleware(request: NextRequest) {
   
   // For debugging - log auth attempts (remove in production)
   if (process.env.NODE_ENV === 'development') {
-    console.log(`[Auth Middleware] ${pathname} - Auth: ${authCookie ? 'YES' : 'NO'}`);
+    console.log(`[Auth Middleware] ${pathname} - Auth: ${authCookie ? 'YES' : 'NO'}, CloudId: ${cloudIdCookie ? 'YES' : 'NO'}`);
   }
   
   // If no auth cookie or cloudId, redirect to login
-  if (!authCookie || !cloudIdCookie) {
+  if (!authCookie?.value || !cloudIdCookie?.value) {
     if (pathname !== '/login') {
+      console.log(`[Auth Middleware] Redirecting to login - missing auth cookie or cloudId`);
       const loginUrl = new URL('/login', request.url);
       return NextResponse.redirect(loginUrl);
     }
