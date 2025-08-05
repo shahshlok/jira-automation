@@ -429,6 +429,11 @@ export default function Dashboard() {
                 selectedEpic={selectedEpic}
                 conversations={conversations}
                 setConversations={setConversations}
+                onDataRefresh={() => {
+                    console.log('🔄 Refreshing data after export...');
+                    loadProjectData(true); // Force refresh from API
+                    setLastDataRefresh(new Date());
+                }}
             />
 
         </div>

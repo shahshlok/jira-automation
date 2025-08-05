@@ -19,6 +19,7 @@ interface ChatWidgetProps {
   selectedEpic?: EpicWithStories | null;
   conversations: Record<string, Message[]>;
   setConversations: React.Dispatch<React.SetStateAction<Record<string, Message[]>>>;
+  onDataRefresh?: () => void;
 }
 
 function safeDevLog(label: string, data: unknown) {
@@ -26,7 +27,7 @@ function safeDevLog(label: string, data: unknown) {
   console.log(label, data);
 }
 
-export default function ChatWidget({ selectedStory, selectedEpic, conversations, setConversations }: ChatWidgetProps) {
+export default function ChatWidget({ selectedStory, selectedEpic, conversations, setConversations, onDataRefresh }: ChatWidgetProps) {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,18 +61,22 @@ export default function ChatWidget({ selectedStory, selectedEpic, conversations,
     
     // Positive confirmation patterns
     const positivePatterns = [
-      /^yes$/,
-      /^y$/,
-      /^ok$/,
-      /^okay$/,
-      /^sure$/,
-      /^go ahead$/,
+      /^(yes|y|yeah|yep|yup)$/,
+      /^(ok|okay|k)$/,
+      /^(sure|absolutely|definitely)$/,
+      /^(go ahead|do it|proceed)$/,
+      /^(confirm|confirmed)$/,
+      /^(please|pls).*export/,
       /^export/,
       /yes.*export/,
       /export.*yes/,
-      /^confirm/,
-      /^do it$/,
-      /^proceed/
+      /^(correct|right|good)$/,
+      /^(let'?s do it|let'?s go)$/,
+      /^(continue|go on)$/,
+      /^(sounds good|looks good)$/,
+      /^\u2705/, // Checkmark emoji
+      /^\ud83d\ude80/, // Rocket emoji
+      /^\ud83d\udc4d/, // Thumbs up emoji
     ];
 
     const isPositive = positivePatterns.some(pattern => pattern.test(normalizedMessage));
@@ -249,6 +254,12 @@ export default function ChatWidget({ selectedStory, selectedEpic, conversations,
     // If this is an export confirmation, send special message to AI to trigger MCP tools
     if (isExportConfirmation.shouldExport) {
       const { lastBotMessage, exportType } = isExportConfirmation;
+      console.log('🎉 Export confirmation detected:', {
+        userMessage: messageContent,
+        exportType,
+        hasContext: !!(selectedStory || selectedEpic)
+      });
+      
       if (lastBotMessage && (selectedStory || selectedEpic)) {
         setIsLoading(true);
         setError(null);
@@ -307,7 +318,7 @@ export default function ChatWidget({ selectedStory, selectedEpic, conversations,
           let responseMessage = '';
           if (successfulItems.length > 0) {
             const issueKeys = successfulItems.map((r: any) => r.issueKey).join(', ');
-            responseMessage += `✅ Successfully created ${successfulItems.length} ${exportType === 'test_case' ? 'test cases' : 'user stories'} in Jira:\n${issueKeys}`;
+            responseMessage += `✅ Successfully created ${successfulItems.length} ${exportType === 'test_case' ? 'test cases' : 'user stories'} in Jira:\n${issueKeys}\n\n🔄 Refreshing dashboard to show new items...`;
           }
           
           if (failedItems.length > 0) {
@@ -329,15 +340,37 @@ export default function ChatWidget({ selectedStory, selectedEpic, conversations,
             [conversationKey]: [...(prev[conversationKey] || []), botMessage]
           }));
 
+          // Refresh the dashboard data to show new items
+          if (onDataRefresh && successfulItems.length > 0) {
+            console.log('🔄 Triggering data refresh after successful export');
+            setTimeout(() => {
+              onDataRefresh();
+            }, 1000); // Small delay to ensure Jira has processed the items
+          }
+
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : 'Export failed';
+          console.error('Export error:', err);
           setError(`Export failed: ${errorMessage}`);
           
-          // Add error message to conversation
+          // Provide helpful error message based on error type
+          let helpfulMessage = `❌ Export failed: ${errorMessage}`;
+          
+          if (errorMessage.includes('401') || errorMessage.includes('authentication')) {
+            helpfulMessage += '\n\n🔄 Your session may have expired. Please refresh the page and try again.';
+          } else if (errorMessage.includes('403') || errorMessage.includes('permission')) {
+            helpfulMessage += '\n\n🔒 You may not have permission to create items in this project. Please check your Jira permissions.';
+          } else if (errorMessage.includes('No valid items')) {
+            helpfulMessage += '\n\n📝 Please try generating new content first, then confirm the export.';
+          } else {
+            helpfulMessage += '\n\n🔧 Please check your Jira connection and try again.';
+          }
+          
+          // Add error message to conversation  
           const errorBotMessage = {
             id: generateId(),
             role: 'bot' as const,
-            content: `❌ Export failed: ${errorMessage}. Please try again or check your Jira connection.`
+            content: helpfulMessage
           };
 
           setConversations(prev => ({

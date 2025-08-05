@@ -21,9 +21,10 @@ interface ChatPopupProps {
   selectedEpic?: EpicWithStories | null;
   conversations: Record<string, Message[]>;
   setConversations: React.Dispatch<React.SetStateAction<Record<string, Message[]>>>;
+  onDataRefresh?: () => void;
 }
 
-export const ChatPopup = ({ open, onOpenChange, selectedStory, selectedEpic, conversations, setConversations }: ChatPopupProps) => {
+export const ChatPopup = ({ open, onOpenChange, selectedStory, selectedEpic, conversations, setConversations, onDataRefresh }: ChatPopupProps) => {
   const [isSpinning, setIsSpinning] = useState(false);
 
   useEffect(() => {
@@ -95,6 +96,7 @@ export const ChatPopup = ({ open, onOpenChange, selectedStory, selectedEpic, con
                 selectedEpic={selectedEpic}
                 conversations={conversations}
                 setConversations={setConversations}
+                onDataRefresh={onDataRefresh}
               />
             </div>
           </div>
