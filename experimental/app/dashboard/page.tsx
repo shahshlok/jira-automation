@@ -59,6 +59,7 @@ export default function Dashboard() {
     const [loadingData, setLoadingData] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [user, setUser] = useState<any>(null);
+    const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
     // Load user info and projects on mount
     useEffect(() => {
@@ -131,9 +132,7 @@ export default function Dashboard() {
             return;
         }
 
-        if (isRefresh) {
-            setIsRefreshing(true);
-        } else {
+        if (!isRefresh) {
             setLoadingData(true);
         }
 
@@ -241,9 +240,7 @@ export default function Dashboard() {
             console.error("Error fetching project data:", error);
             setEpicsWithStories([]);
         } finally {
-            if (isRefresh) {
-                setIsRefreshing(false);
-            } else {
+            if (!isRefresh) {
                 setLoadingData(false);
             }
         }
@@ -305,24 +302,63 @@ export default function Dashboard() {
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
+        setRefreshMessage('Fetching latest data from JIRA...');
+        
         try {
             console.log('🔄 Full refresh initiated - fetching latest data from JIRA...');
             
             // Clear cached data to force fresh API call
             delete (window as any).__bulkData;
             
-            // Trigger project data reload which will fetch fresh data
+            // Fetch fresh bulk data directly
+            const startTime = Date.now();
+            const bulkData = await fetchBulkData();
+            const loadTime = Date.now() - startTime;
+            
+            console.log(`⚡ Fresh data loaded in ${loadTime}ms:`, {
+                projects: bulkData.metadata.totalProjects,
+                issues: bulkData.metadata.totalIssues,
+                epics: bulkData.epics.length,
+                stories: bulkData.stories.length,
+                testCases: bulkData.testCases.length
+            });
+            
+            setRefreshMessage('Updating dashboard...');
+            
+            // Update cached data
+            (window as any).__bulkData = bulkData;
+            
+            // Update projects list
+            setProjects(bulkData.projects);
+            
+            // Trigger project data reload to update the current view
             await loadProjectData(true);
             
-            // Update projects list from the fresh bulk data
-            const bulkData = (window as any).__bulkData;
-            if (bulkData && bulkData.projects) {
-                setProjects(bulkData.projects);
-            }
-            
+            setRefreshMessage('✅ Dashboard updated successfully!');
             console.log('✅ Full refresh completed - all data updated');
+            
+            // Clear success message after 2 seconds
+            setTimeout(() => setRefreshMessage(null), 2000);
+            
         } catch (error) {
             console.error('❌ Refresh failed:', error);
+            
+            // Show user-friendly error message based on error type
+            let errorMsg = '⚠️ Refresh failed. Please try again.';
+            if (error && typeof error === 'object' && 'message' in error) {
+                const errorMessage = (error as Error).message;
+                if (errorMessage.includes('401') || errorMessage.includes('authentication')) {
+                    errorMsg = '🔐 Authentication expired. Please refresh the page.';
+                } else if (errorMessage.includes('Network')) {
+                    errorMsg = '🌐 Network error. Please check your connection.';
+                }
+            }
+            
+            setRefreshMessage(errorMsg);
+            
+            // Clear error message after 4 seconds
+            setTimeout(() => setRefreshMessage(null), 4000);
+            
         } finally {
             setIsRefreshing(false);
         }
@@ -435,6 +471,26 @@ export default function Dashboard() {
                     setLastDataRefresh(new Date());
                 }}
             />
+
+            {/* Refresh Message Notification */}
+            {refreshMessage && (
+                <div className="fixed top-4 right-4 z-50 max-w-sm">
+                    <div className={`rounded-lg px-4 py-3 shadow-lg border ${
+                        refreshMessage.includes('✅') 
+                            ? 'bg-green-50 border-green-200 text-green-800' 
+                            : refreshMessage.includes('⚠️') || refreshMessage.includes('🔐') || refreshMessage.includes('🌐')
+                            ? 'bg-red-50 border-red-200 text-red-800'
+                            : 'bg-blue-50 border-blue-200 text-blue-800'
+                    }`}>
+                        <div className="flex items-center">
+                            {!refreshMessage.includes('✅') && !refreshMessage.includes('⚠️') && !refreshMessage.includes('🔐') && !refreshMessage.includes('🌐') && (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-3"></div>
+                            )}
+                            <span className="text-sm font-medium">{refreshMessage}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div>
     );

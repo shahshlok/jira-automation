@@ -77,6 +77,11 @@ export default function ChatWidget({ selectedStory, selectedEpic, conversations,
       /^\u2705/, // Checkmark emoji
       /^\ud83d\ude80/, // Rocket emoji
       /^\ud83d\udc4d/, // Thumbs up emoji
+      /^1$/, // Option 1 (export option from AI response)
+      /^option 1$/,
+      /^first$/,
+      /export.*to.*jira/i,
+      /add.*to.*jira/i,
     ];
 
     const isPositive = positivePatterns.some(pattern => pattern.test(normalizedMessage));
@@ -96,7 +101,11 @@ export default function ChatWidget({ selectedStory, selectedEpic, conversations,
         botMessage.content.includes('Would you like to export') ||
         botMessage.content.includes('Would you like to add these') ||
         botMessage.content.includes('export these to Jira') ||
-        botMessage.content.includes('add these to the epic in Jira');
+        botMessage.content.includes('export these to JIRA') ||
+        botMessage.content.includes('add these to the epic in Jira') ||
+        botMessage.content.includes('Export these test cases to JIRA') ||
+        botMessage.content.includes('Export these user stories to JIRA') ||
+        botMessage.content.includes('Please let me know how you\'d like to proceed');
       
       if (hasExportQuestion) {
         if (exportableContent.hasTestCases) {
@@ -265,19 +274,6 @@ export default function ChatWidget({ selectedStory, selectedEpic, conversations,
         setError(null);
 
         try {
-          // Create context for the export request
-          const context = {
-            story: selectedStory ? {
-              key: selectedStory.key,
-              summary: selectedStory.summary,
-              epicLink: selectedStory.epicLink
-            } : undefined,
-            epic: selectedEpic ? {
-              key: selectedEpic.key,
-              summary: selectedEpic.summary
-            } : undefined
-          };
-
           const parentKey = exportType === 'test_case' ? selectedStory?.key : selectedEpic?.key;
 
           // Parse the AI content and export directly using our backend
